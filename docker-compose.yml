@@ -1,0 +1,28 @@
+services:
+  # PostgreSQL Database - PRIMARY DATABASE (as per PRD Section 3)
+  postgres:
+    image: postgres:14-alpine
+    container_name: helios_postgres
+    environment:
+      POSTGRES_USER: helios
+      POSTGRES_PASSWORD: helios_secure_password_123
+      POSTGRES_DB: helios_v3
+      PGDATA: /var/lib/postgresql/data/pgdata
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U helios -d helios_v3"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  postgres_data:
+    name: helios_postgres_data
+
+networks:
+  default:
+    name: helios_network
