@@ -217,17 +217,32 @@ class FeatureEngineer:
         """Calculate price-based features (3)"""
         close = df['close'].values
 
-        # Simple return
-        ret = (close[-1] - close[-2]) / close[-2] if len(close) > 1 else 0.0
+        # Simple return - handle division by zero
+        if len(close) > 1 and close[-2] > 0:
+            ret = (close[-1] - close[-2]) / close[-2]
+            # Replace NaN/inf with 0
+            if not np.isfinite(ret):
+                ret = 0.0
+        else:
+            ret = 0.0
 
-        # Log return
-        log_ret = np.log(close[-1] / close[-2]) if len(close) > 1 and close[-2] > 0 else 0.0
+        # Log return - handle zero/negative prices
+        if len(close) > 1 and close[-2] > 0 and close[-1] > 0:
+            log_ret = np.log(close[-1] / close[-2])
+            # Replace NaN/inf with 0
+            if not np.isfinite(log_ret):
+                log_ret = 0.0
+        else:
+            log_ret = 0.0
 
         # Normalized price (z-score over last 20 periods)
         if len(close) >= 20:
             mean = np.mean(close[-20:])
             std = np.std(close[-20:])
             norm_price = (close[-1] - mean) / std if std > 0 else 0.0
+            # Replace NaN/inf with 0
+            if not np.isfinite(norm_price):
+                norm_price = 0.0
         else:
             norm_price = 0.0
 
@@ -383,9 +398,19 @@ class FeatureEngineer:
 
         # Historical volatility (20-period)
         if len(close) >= 21:
-            returns = np.diff(np.log(close[-21:]))
-            hist_vol = np.std(returns) * np.sqrt(252)  # Annualized
-            features.append(hist_vol)
+            # Handle zero/same prices - check if all prices are valid and different
+            prices = close[-21:]
+            if np.all(prices > 0) and np.std(prices) > 0:
+                returns = np.diff(np.log(prices))
+                # Replace any NaN/inf in returns with 0
+                returns = np.where(np.isfinite(returns), returns, 0.0)
+                hist_vol = np.std(returns) * np.sqrt(252)  # Annualized
+                # Replace NaN/inf in result with 0
+                if not np.isfinite(hist_vol):
+                    hist_vol = 0.0
+                features.append(hist_vol)
+            else:
+                features.append(0.0)
         else:
             features.append(0.0)
 
@@ -491,17 +516,37 @@ class FeatureEngineer:
 
         # Skewness (20-period)
         if len(close) >= 20:
-            returns = np.diff(np.log(close[-21:]))
-            skew = self._calculate_skewness(returns)
-            features.append(skew)
+            # Handle zero/same prices - check if all prices are valid and different
+            prices = close[-21:]
+            if np.all(prices > 0) and np.std(prices) > 0:
+                returns = np.diff(np.log(prices))
+                # Replace any NaN/inf in returns with 0
+                returns = np.where(np.isfinite(returns), returns, 0.0)
+                skew = self._calculate_skewness(returns)
+                # Replace NaN/inf in result with 0
+                if not np.isfinite(skew):
+                    skew = 0.0
+                features.append(skew)
+            else:
+                features.append(0.0)
         else:
             features.append(0.0)
 
         # Kurtosis (20-period)
         if len(close) >= 20:
-            returns = np.diff(np.log(close[-21:]))
-            kurt = self._calculate_kurtosis(returns)
-            features.append(kurt)
+            # Handle zero/same prices - check if all prices are valid and different
+            prices = close[-21:]
+            if np.all(prices > 0) and np.std(prices) > 0:
+                returns = np.diff(np.log(prices))
+                # Replace any NaN/inf in returns with 0
+                returns = np.where(np.isfinite(returns), returns, 0.0)
+                kurt = self._calculate_kurtosis(returns)
+                # Replace NaN/inf in result with 0
+                if not np.isfinite(kurt):
+                    kurt = 0.0
+                features.append(kurt)
+            else:
+                features.append(0.0)
         else:
             features.append(0.0)
 

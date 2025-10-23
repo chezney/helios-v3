@@ -1,0 +1,2436 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Helios V3.0 - Trading Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1e3c72 0%, #2a5298 100%);
+            color: #fff;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1600px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 10px;
+            backdrop-filter: blur(10px);
+        }
+
+        .header h1 {
+            font-size: 2.5em;
+            margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        .status-badges {
+            display: flex;
+            justify-content: center;
+            gap: 15px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+
+        .status-badge {
+            display: inline-block;
+            padding: 10px 25px;
+            border-radius: 25px;
+            font-weight: bold;
+            font-size: 1em;
+            border: 2px solid rgba(255,255,255,0.3);
+        }
+
+        .status-running { background: #28a745; border-color: #28a745; }
+        .status-stopped { background: #dc3545; border-color: #dc3545; }
+        .status-paused { background: #ffc107; color: #000; border-color: #ffc107; }
+        .status-enabled { background: #4caf50; border-color: #4caf50; }
+        .status-disabled { background: #f44336; border-color: #f44336; }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .grid-wide {
+            grid-column: 1 / -1;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.15);
+            border-radius: 15px;
+            padding: 25px;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+        }
+
+        .card h2 {
+            font-size: 1.3em;
+            margin-bottom: 15px;
+            border-bottom: 2px solid rgba(255, 255, 255, 0.3);
+            padding-bottom: 10px;
+        }
+
+        .metric {
+            margin: 15px 0;
+            padding: 15px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+        }
+
+        .metric-label {
+            font-size: 0.9em;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .metric-value {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+
+        .metric-value.positive {
+            color: #4caf50;
+        }
+
+        .metric-value.negative {
+            color: #f44336;
+        }
+
+        .decision-item {
+            padding: 15px;
+            margin: 10px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border-left: 5px solid #2196F3;
+        }
+
+        .decision-item.executed {
+            border-left-color: #4caf50;
+            background: rgba(76, 175, 80, 0.15);
+        }
+
+        .decision-item.rejected {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.15);
+        }
+
+        .decision-item.approved {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.15);
+        }
+
+        .decision-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 10px;
+        }
+
+        .decision-signal {
+            font-weight: bold;
+            font-size: 1.2em;
+        }
+
+        .decision-signal.buy { color: #4caf50; }
+        .decision-signal.sell { color: #f44336; }
+
+        .decision-status {
+            padding: 5px 12px;
+            border-radius: 15px;
+            font-size: 0.85em;
+            font-weight: bold;
+            text-transform: uppercase;
+        }
+
+        .decision-status.executed {
+            background: #4caf50;
+        }
+
+        .decision-status.rejected {
+            background: #f44336;
+        }
+
+        .decision-status.approved {
+            background: #ffc107;
+            color: #000;
+        }
+
+        .decision-details {
+            font-size: 0.9em;
+            opacity: 0.9;
+            margin-top: 8px;
+        }
+
+        .decision-reason {
+            margin-top: 10px;
+            padding: 10px;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 5px;
+            font-size: 0.85em;
+            font-style: italic;
+        }
+
+        .rejected-by {
+            display: inline-block;
+            padding: 3px 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 10px;
+            font-size: 0.8em;
+            margin-top: 5px;
+        }
+
+        .trade-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(0, 0, 0, 0.3);
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+        }
+
+        .trade-item.buy {
+            border-left-color: #4caf50;
+        }
+
+        .trade-item.sell {
+            border-left-color: #f44336;
+        }
+
+        .trade-item.hold {
+            border-left-color: #ffc107;
+        }
+
+        .confidence-bar {
+            width: 100%;
+            height: 8px;
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+            margin-top: 5px;
+            overflow: hidden;
+        }
+
+        .confidence-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #4caf50, #8bc34a);
+            transition: width 0.3s ease;
+        }
+
+        .refresh-indicator {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            background: rgba(33, 150, 243, 0.9);
+            padding: 10px 20px;
+            border-radius: 20px;
+            font-size: 0.9em;
+            display: none;
+            z-index: 1000;
+        }
+
+        .refresh-indicator.active {
+            display: block;
+            animation: pulse 1s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .log-container {
+            background: rgba(0, 0, 0, 0.4);
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .log-item {
+            padding: 8px;
+            margin: 5px 0;
+            font-family: 'Courier New', monospace;
+            font-size: 0.85em;
+            border-left: 3px solid #2196F3;
+            padding-left: 10px;
+        }
+
+        .log-item.error {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        .log-item.success {
+            border-left-color: #4caf50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            flex: 1;
+        }
+
+        .btn:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+        }
+
+        .btn-enable {
+            background: #4caf50;
+            color: white;
+        }
+
+        .btn-disable {
+            background: #f44336;
+            color: white;
+        }
+
+        .loading {
+            text-align: center;
+            padding: 20px;
+            opacity: 0.6;
+        }
+
+        /* Signal explanation indicator styles */
+        .indicator-item {
+            padding: 12px;
+            margin: 8px 0;
+            background: rgba(0, 0, 0, 0.25);
+            border-radius: 8px;
+            border-left: 4px solid #2196F3;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .indicator-item.bullish {
+            border-left-color: #4caf50;
+            background: rgba(76, 175, 80, 0.1);
+        }
+
+        .indicator-item.bearish {
+            border-left-color: #f44336;
+            background: rgba(244, 67, 54, 0.1);
+        }
+
+        .indicator-item.neutral {
+            border-left-color: #ffc107;
+            background: rgba(255, 193, 7, 0.05);
+        }
+
+        .indicator-name {
+            font-weight: bold;
+            font-size: 0.95em;
+        }
+
+        .indicator-value {
+            font-size: 1.1em;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .indicator-interpretation {
+            font-size: 0.85em;
+            opacity: 0.8;
+            margin-top: 3px;
+        }
+
+        /* Scrollbar styling */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.3);
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(255, 255, 255, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="refresh-indicator" id="refreshIndicator">Updating...</div>
+
+    <div class="container">
+        <!-- Header -->
+        <div class="header">
+            <h1>🤖 HELIOS V3.0</h1>
+            <p>Autonomous Trading System Dashboard</p>
+            <div class="status-badges">
+                <div class="status-badge" id="engineStatusBadge">Engine: Loading...</div>
+                <div class="status-badge" id="autoTradingBadge">Auto-Trade: Loading...</div>
+            </div>
+        </div>
+
+        <!-- Control Panel -->
+        <div class="card" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(255,255,255,0.15) 0%, rgba(255,255,255,0.08) 100%);">
+            <h2>🎮 Control Panel</h2>
+
+            <!-- Mode Switching -->
+            <div style="margin-bottom: 25px; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <h3 style="margin-bottom: 15px; font-size: 1.2em;">Mode Switching</h3>
+                <div style="display: flex; align-items: center; gap: 20px; flex-wrap: wrap;">
+                    <div class="metric" style="flex: 0 0 200px;">
+                        <div class="metric-label">Current Mode</div>
+                        <div class="metric-value" id="currentMode" style="font-size: 1.8em;">-</div>
+                    </div>
+                    <div style="flex: 1; min-width: 300px;">
+                        <button class="btn" id="switchToPaperBtn" onclick="switchMode('PAPER')"
+                                style="background: #4CAF50; margin-right: 10px; padding: 12px 24px; font-size: 1.1em;">
+                            📝 Switch to PAPER Mode
+                        </button>
+                        <button class="btn" id="switchToLiveBtn" onclick="switchMode('LIVE')"
+                                style="background: #f44336; padding: 12px 24px; font-size: 1.1em;">
+                            🔴 Switch to LIVE Mode
+                        </button>
+                        <div id="modeSwitchStatus" style="margin-top: 10px; font-size: 0.9em; color: #ffc107;"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- WebSocket Status -->
+            <div style="margin-bottom: 25px; padding: 20px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <h3 style="margin-bottom: 15px; font-size: 1.2em;">WebSocket Status</h3>
+                <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 15px;">
+                    <div class="metric">
+                        <div class="metric-label">Connection</div>
+                        <div class="metric-value" id="wsConnection">-</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Execution Method</div>
+                        <div class="metric-value" id="wsExecMethod">-</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Avg Execution Time</div>
+                        <div class="metric-value" id="wsExecTime">-</div>
+                    </div>
+                    <div class="metric">
+                        <div class="metric-label">Orders (WebSocket)</div>
+                        <div class="metric-value" id="wsOrderCount">-</div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Test Execution -->
+            <div style="padding: 20px; background: rgba(0,0,0,0.2); border-radius: 8px;">
+                <h3 style="margin-bottom: 15px; font-size: 1.2em;">Test Execution</h3>
+                <div style="display: flex; gap: 15px; flex-wrap: wrap; align-items: flex-end;">
+                    <div style="flex: 0 0 150px;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Pair</label>
+                        <select id="testPair" style="width: 100%; padding: 10px; font-size: 1em; border-radius: 5px; border: none; background: rgba(255,255,255,0.9); color: #333;">
+                            <option value="BTCZAR">BTCZAR</option>
+                            <option value="ETHZAR">ETHZAR</option>
+                            <option value="SOLZAR">SOLZAR</option>
+                        </select>
+                    </div>
+                    <div style="flex: 0 0 150px;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Side</label>
+                        <select id="testSide" style="width: 100%; padding: 10px; font-size: 1em; border-radius: 5px; border: none; background: rgba(255,255,255,0.9); color: #333;">
+                            <option value="BUY">BUY</option>
+                            <option value="SELL">SELL</option>
+                        </select>
+                    </div>
+                    <div style="flex: 0 0 180px;">
+                        <label style="display: block; margin-bottom: 5px; font-size: 0.9em;">Quantity (BTC)</label>
+                        <input type="number" id="testQuantity" value="0.0001" step="0.00001"
+                               style="width: 100%; padding: 10px; font-size: 1em; border-radius: 5px; border: none; background: rgba(255,255,255,0.9); color: #333;">
+                    </div>
+                    <div style="flex: 1; min-width: 200px;">
+                        <button class="btn" onclick="executeTestTrade()"
+                                style="background: #2196F3; padding: 10px 24px; font-size: 1.1em; width: 100%;">
+                            🚀 Execute Test Trade
+                        </button>
+                    </div>
+                </div>
+                <div id="testResults" style="margin-top: 15px; padding: 15px; background: rgba(0,0,0,0.3); border-radius: 5px; display: none;">
+                    <h4 style="margin-bottom: 10px; color: #ffc107;">Test Results:</h4>
+                    <pre id="testResultsContent" style="margin: 0; white-space: pre-wrap; font-size: 0.9em; line-height: 1.6;"></pre>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Metrics -->
+        <div class="grid">
+            <!-- Engine Status -->
+            <div class="card">
+                <h2>⚡ Engine Status</h2>
+                <div class="metric">
+                    <div class="metric-label">Engine Status</div>
+                    <div class="metric-value" id="engineStatus">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Auto-Trading</div>
+                    <div class="metric-value" id="autoTrading">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Trading Mode</div>
+                    <div class="metric-value" id="tradingMode">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Cycles Completed</div>
+                    <div class="metric-value" id="cycleCount">-</div>
+                </div>
+                <div class="controls">
+                    <button class="btn btn-enable" onclick="startEngine()" style="background: #2196F3;">▶ Start</button>
+                    <button class="btn btn-disable" onclick="stopEngine()" style="background: #9e9e9e;">■ Stop</button>
+                </div>
+                <div class="controls" style="margin-top: 10px;">
+                    <button class="btn btn-enable" onclick="enableTrading()">Enable Auto-Trade</button>
+                    <button class="btn btn-disable" onclick="disableTrading()">Disable Auto-Trade</button>
+                </div>
+            </div>
+
+            <!-- Portfolio -->
+            <div class="card">
+                <h2>💰 Portfolio</h2>
+                <div class="metric">
+                    <div class="metric-label">Total Value</div>
+                    <div class="metric-value" id="portfolioValue">R 0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Open Positions</div>
+                    <div class="metric-value" id="openPositions">0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Current Drawdown</div>
+                    <div class="metric-value" id="drawdown">0%</div>
+                </div>
+            </div>
+
+            <!-- Latest Prediction -->
+            <div class="card">
+                <h2>🎯 Latest Prediction (BTCZAR)</h2>
+                <div class="metric">
+                    <div class="metric-label">Live Price (WebSocket)</div>
+                    <div class="metric-value" id="livePrice" style="font-size: 2.2em; color: #ffc107;">R 0</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Signal</div>
+                    <div class="metric-value" id="latestSignal">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Confidence</div>
+                    <div class="metric-value" id="latestConfidence">-</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="confidenceBar" style="width: 0%"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Risk Dashboard -->
+            <div class="card" style="background: rgba(255, 152, 0, 0.15); border: 2px solid rgba(255, 152, 0, 0.4);">
+                <h2>⚠️ Portfolio Risk Monitor</h2>
+
+                <!-- Dynamic Risk Limit -->
+                <div class="metric">
+                    <div class="metric-label">Dynamic Risk Limit (Aggressive Mode)</div>
+                    <div class="metric-value" id="dynamicRiskLimit" style="font-size: 1.5em; font-weight: bold;">Loading...</div>
+                    <div style="margin-top: 5px; font-size: 0.85em; color: rgba(255, 255, 255, 0.7);">
+                        <span id="riskRegime">-</span> | Volatility: <span id="portfolioVolatility">-</span>
+                    </div>
+                </div>
+
+                <!-- Risk Score -->
+                <div class="metric">
+                    <div class="metric-label">Risk Score</div>
+                    <div class="metric-value" id="riskScore">Loading...</div>
+                    <div class="confidence-bar">
+                        <div class="confidence-fill" id="riskScoreBar" style="width: 0%; background: linear-gradient(90deg, #4caf50, #ffc107, #f44336);"></div>
+                    </div>
+                </div>
+
+                <!-- Two-column layout for compact display -->
+                <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px; margin-top: 10px;">
+                    <!-- Left column -->
+                    <div>
+                        <div class="metric">
+                            <div class="metric-label">Available Cash</div>
+                            <div class="metric-value" id="availableCash" style="font-size: 1.2em; color: #4caf50;">-</div>
+                            <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 3px;">Liquid capital for trades</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Portfolio Exposure</div>
+                            <div class="metric-value" id="portfolioExposure" style="font-size: 1.2em;">-</div>
+                            <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 3px;">Position value / Portfolio</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Value at Risk (95%)</div>
+                            <div class="metric-value" id="var95" style="font-size: 1.2em;">-</div>
+                            <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 3px;">Max expected loss (95% conf)</div>
+                        </div>
+                    </div>
+
+                    <!-- Right column -->
+                    <div>
+                        <div class="metric">
+                            <div class="metric-label">Risk Capacity Remaining</div>
+                            <div class="metric-value" id="riskCapacity" style="font-size: 1.2em; color: #2196F3;">-</div>
+                            <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 3px;">Budget left for new trades</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Open Positions</div>
+                            <div class="metric-value" id="openPositions" style="font-size: 1.2em;">-</div>
+                            <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 3px;">Current / Max allowed</div>
+                        </div>
+                        <div class="metric">
+                            <div class="metric-label">Daily P&L</div>
+                            <div class="metric-value" id="dailyPnl" style="font-size: 1.2em;">-</div>
+                            <div style="font-size: 0.75em; color: rgba(255,255,255,0.5); margin-top: 3px;">Today's profit/loss</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Signal Summary Card (NEW) -->
+        <div class="card" style="background: rgba(255, 255, 255, 0.2); border: 2px solid rgba(255, 255, 255, 0.3);">
+            <h2>📊 Current Trading Signal</h2>
+            <div id="signalSummary" class="loading">Loading signal...</div>
+        </div>
+
+        <!-- Timeframe Comparison Chart (NEW) -->
+        <div class="card">
+            <h2>⏱️ Timeframe Signal Comparison (1min | 5min | 15min)</h2>
+            <div id="timeframeComparison" class="loading">Loading timeframe data...</div>
+        </div>
+
+        <!-- Signal History Graph -->
+        <div class="card">
+            <h2>📊 Prediction Signal History (Last 24 Hours)</h2>
+            <div style="margin-top: 20px;">
+                <!-- Unified Prediction Signals -->
+                <div style="background: rgba(76, 175, 80, 0.1); border: 2px solid #4caf50; border-radius: 10px; padding: 20px;">
+                    <h3 style="text-align: center; color: #4caf50; margin-bottom: 15px;">Unified Multi-Timeframe Prediction</h3>
+                    <canvas id="chart-unified" style="max-height: 400px;"></canvas>
+                    <div id="stats-unified" style="margin-top: 15px; font-size: 0.9em;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Recent Predictions Table -->
+        <div class="card">
+            <h2>📋 Last 20 Recent Predictions</h2>
+            <div id="recentPredictionsTable" class="loading">Loading recent predictions...</div>
+        </div>
+
+        <!-- Signal Explanation Section (Top 8 Indicators) -->
+        <div class="card">
+            <h2>🧠 Top 8 Key Indicators</h2>
+            <div id="signalExplanation" class="loading">Loading explanation...</div>
+        </div>
+
+        <!-- All Features Section (Expandable) -->
+        <div class="card">
+            <h2>📈 All 120 Features Used by Model (1m | 5m | 15m | 1h)</h2>
+            <button onclick="toggleAllFeatures()" style="margin-bottom: 15px; padding: 10px 20px; background: rgba(33, 150, 243, 0.8); border: none; border-radius: 5px; color: white; cursor: pointer; font-weight: bold;">
+                <span id="toggleButtonText">▶ Show All Features</span>
+            </button>
+            <div id="allFeaturesContainer" style="display: none;">
+                <div id="allFeatures" class="loading">Loading all features...</div>
+            </div>
+        </div>
+
+        <!-- Trade Decisions Section (NEW) -->
+        <div class="card">
+            <h2>🎲 Trade Decisions (Last 20 - Approved, Rejected, Executed)</h2>
+            <div id="tradeDecisions" class="loading">Loading trade decisions...</div>
+        </div>
+
+        <!-- Activity Sections -->
+        <div class="grid">
+            <!-- Open Positions -->
+            <div class="card">
+                <h2>📈 Open Positions</h2>
+                <div id="openPositionsList" class="loading">Loading...</div>
+            </div>
+
+            <!-- Recent Trades -->
+            <div class="card">
+                <h2>🔄 Recent Activity</h2>
+                <div id="recentTrades" class="loading">Loading...</div>
+            </div>
+        </div>
+
+        <!-- Closed Trades Performance -->
+        <div class="card">
+            <h2>💰 Closed Trades Performance</h2>
+            <div id="closedTradesStats" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 15px; margin-bottom: 20px;">
+                <div class="metric">
+                    <div class="metric-label">Total Trades</div>
+                    <div class="metric-value" id="totalClosedTrades">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Win Rate</div>
+                    <div class="metric-value" id="winRate">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Total PnL</div>
+                    <div class="metric-value" id="totalPnL">-</div>
+                </div>
+                <div class="metric">
+                    <div class="metric-label">Avg PnL</div>
+                    <div class="metric-value" id="avgPnL">-</div>
+                </div>
+            </div>
+            <div id="closedTradesList" class="loading">Loading...</div>
+        </div>
+
+        <!-- Activity Log -->
+        <div class="card">
+            <h2>📝 Activity Log</h2>
+            <div class="log-container" id="activityLog">
+                <div class="log-item">System initialized. Waiting for data...</div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Use empty string to let Nginx proxy handle /api requests
+        const API_BASE = '';
+        const REFRESH_INTERVAL = 3000; // 3 seconds
+        let logs = [];
+
+        // Add log entry
+        function addLog(message, type = 'info') {
+            const timestamp = new Date().toLocaleTimeString();
+            logs.unshift({ timestamp, message, type });
+            if (logs.length > 50) logs.pop();
+
+            const logContainer = document.getElementById('activityLog');
+            logContainer.innerHTML = logs.map(log =>
+                `<div class="log-item ${log.type}">[${log.timestamp}] ${log.message}</div>`
+            ).join('');
+        }
+
+        // Fetch engine status
+        async function fetchEngineStatus() {
+            try {
+                const response = await fetch(`${API_BASE}/api/autonomous-engine/status`);
+                const data = await response.json();
+
+                // Update individual status displays
+                document.getElementById('engineStatus').textContent = data.status || 'UNKNOWN';
+                document.getElementById('autoTrading').textContent = data.auto_trading_enabled ? 'ENABLED ✓' : 'DISABLED ✗';
+                document.getElementById('tradingMode').textContent = data.trading_mode || 'UNKNOWN';
+                document.getElementById('cycleCount').textContent = (data.cycle_count || 0).toLocaleString();
+
+                // Update header badges
+                const engineBadge = document.getElementById('engineStatusBadge');
+                engineBadge.textContent = `Engine: ${data.status}`;
+                engineBadge.className = 'status-badge status-' + data.status.toLowerCase();
+
+                const autoTradingBadge = document.getElementById('autoTradingBadge');
+                autoTradingBadge.textContent = `Auto-Trade: ${data.auto_trading_enabled ? 'ENABLED' : 'DISABLED'}`;
+                autoTradingBadge.className = 'status-badge ' + (data.auto_trading_enabled ? 'status-enabled' : 'status-disabled');
+
+                // Color code auto-trading status
+                if (data.auto_trading_enabled) {
+                    document.getElementById('autoTrading').style.color = '#4caf50';
+                } else {
+                    document.getElementById('autoTrading').style.color = '#f44336';
+                }
+            } catch (error) {
+                addLog(`Error fetching engine status: ${error.message}`, 'error');
+            }
+        }
+
+        // Fetch portfolio
+        async function fetchPortfolio() {
+            try {
+                const response = await fetch(`${API_BASE}/api/portfolio/summary`);
+                const data = await response.json();
+
+                // Use correct field names from API
+                const portfolioValue = data.portfolio_value || 0;
+                document.getElementById('portfolioValue').textContent =
+                    `R ${portfolioValue.toLocaleString('en-ZA', {minimumFractionDigits: 2, maximumFractionDigits: 2})}`;
+
+                // Get open positions count from positions endpoint
+                const posResponse = await fetch(`${API_BASE}/api/portfolio/positions`);
+                const posData = await posResponse.json();
+                const positions = posData.positions || [];
+                const openCount = positions.filter(p => p.status === 'OPEN').length;
+                document.getElementById('openPositions').textContent = openCount;
+
+                const drawdown = data.current_drawdown_pct || 0;
+                const drawdownEl = document.getElementById('drawdown');
+                drawdownEl.textContent = `${drawdown.toFixed(2)}%`;
+                drawdownEl.className = 'metric-value ' + (drawdown < 0 ? 'negative' : 'positive');
+            } catch (error) {
+                addLog(`Error fetching portfolio: ${error.message}`, 'error');
+            }
+        }
+
+        // Fetch live price from WebSocket
+        async function fetchLivePrice() {
+            try {
+                const response = await fetch(`${API_BASE}/api/market/ticker/BTCZAR`);
+                const data = await response.json();
+
+                const price = data.last_price || 0;
+                const change24h = data.change_24h_pct || 0;
+
+                const priceEl = document.getElementById('livePrice');
+                priceEl.textContent = `R ${price.toLocaleString('en-ZA', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+
+                // Color code based on 24h change
+                if (change24h > 0) {
+                    priceEl.style.color = '#4caf50'; // Green for up
+                } else if (change24h < 0) {
+                    priceEl.style.color = '#f44336'; // Red for down
+                } else {
+                    priceEl.style.color = '#ffc107'; // Yellow for flat
+                }
+            } catch (error) {
+                console.error('Error fetching live price:', error);
+            }
+        }
+
+        // Fetch latest prediction
+        async function fetchLatestPrediction() {
+            try {
+                const response = await fetch(`${API_BASE}/api/tier2/predict/BTCZAR`);
+                const data = await response.json();
+
+                const signal = data.prediction;
+                const confidence = data.confidence * 100;
+
+                document.getElementById('latestSignal').textContent = signal;
+                document.getElementById('latestConfidence').textContent = `${confidence.toFixed(1)}%`;
+                document.getElementById('confidenceBar').style.width = `${confidence}%`;
+
+                const signalEl = document.getElementById('latestSignal');
+                signalEl.className = 'metric-value';
+                if (signal === 'BUY') signalEl.style.color = '#4caf50';
+                else if (signal === 'SELL') signalEl.style.color = '#f44336';
+                else signalEl.style.color = '#ffc107';
+
+                if (signal !== 'HOLD') {
+                    addLog(`New ${signal} signal for BTCZAR (${confidence.toFixed(1)}% confidence)`, 'success');
+                }
+            } catch (error) {
+                addLog(`Error fetching prediction: ${error.message}`, 'error');
+            }
+        }
+
+        // Fetch risk dashboard
+        async function fetchRiskDashboard() {
+            try {
+                const response = await fetch(`${API_BASE}/api/risk/dashboard`);
+                const data = await response.json();
+
+                // Fetch portfolio summary for cash balance
+                const portfolioResponse = await fetch(`${API_BASE}/api/portfolio/summary`);
+                const portfolioData = await portfolioResponse.json();
+
+                // Dynamic Risk Limit (Aggressive Mode: 25-50%)
+                const dynamicRiskLimit = data.dynamic_portfolio_risk_limit_pct || 15.0;
+                const portfolioVol = data.portfolio_volatility_daily_pct || 1.5;
+                const riskRegime = data.risk_regime || 'NORMAL';
+
+                document.getElementById('dynamicRiskLimit').textContent =
+                    `${dynamicRiskLimit.toFixed(1)}% (Range: 25-50%)`;
+                document.getElementById('portfolioVolatility').textContent =
+                    `${portfolioVol.toFixed(2)}% daily`;
+                document.getElementById('riskRegime').textContent = riskRegime;
+
+                // Color code dynamic risk limit based on regime
+                const dynamicRiskEl = document.getElementById('dynamicRiskLimit');
+                const regimeEl = document.getElementById('riskRegime');
+                if (riskRegime === 'AGGRESSIVE') {
+                    dynamicRiskEl.style.color = '#4caf50'; // Green - High limit (calm market)
+                    regimeEl.style.color = '#4caf50';
+                } else if (riskRegime === 'NORMAL') {
+                    dynamicRiskEl.style.color = '#2196F3'; // Blue - Normal limit
+                    regimeEl.style.color = '#2196F3';
+                } else if (riskRegime === 'DEFENSIVE') {
+                    dynamicRiskEl.style.color = '#ffc107'; // Yellow - Low limit (volatile)
+                    regimeEl.style.color = '#ffc107';
+                } else {
+                    dynamicRiskEl.style.color = '#f44336'; // Red - Minimum limit (crash)
+                    regimeEl.style.color = '#f44336';
+                }
+
+                // Risk Score (0-1 scale)
+                const riskScore = data.current_risk_score || 0;
+                document.getElementById('riskScore').textContent = `${(riskScore * 100).toFixed(1)}%`;
+                document.getElementById('riskScoreBar').style.width = `${riskScore * 100}%`;
+
+                // Color code risk score
+                const riskEl = document.getElementById('riskScore');
+                if (riskScore < 0.3) {
+                    riskEl.style.color = '#4caf50'; // Green - Low risk
+                } else if (riskScore < 0.6) {
+                    riskEl.style.color = '#ffc107'; // Yellow - Medium risk
+                } else {
+                    riskEl.style.color = '#f44336'; // Red - High risk
+                }
+
+                // Portfolio Exposure
+                const exposure = data.portfolio_exposure_pct || 0;
+                const exposureLimit = 95; // Max exposure limit
+                document.getElementById('portfolioExposure').textContent =
+                    `${exposure.toFixed(1)}% / ${exposureLimit}%`;
+
+                // Color code exposure
+                const exposureEl = document.getElementById('portfolioExposure');
+                if (exposure > exposureLimit) {
+                    exposureEl.style.color = '#f44336'; // Red - Over limit
+                } else if (exposure > exposureLimit * 0.8) {
+                    exposureEl.style.color = '#ffc107'; // Yellow - Near limit
+                } else {
+                    exposureEl.style.color = '#4caf50'; // Green - OK
+                }
+
+                // Value at Risk (95%)
+                const var95 = data.var_95_zar || 0;
+                document.getElementById('var95').textContent =
+                    `R ${Math.abs(var95).toLocaleString('en-ZA', {minimumFractionDigits: 0})}`;
+
+                // Color code VaR (always show as negative/warning since it's potential loss)
+                const varEl = document.getElementById('var95');
+                if (Math.abs(var95) > 5000) {
+                    varEl.style.color = '#f44336'; // Red - High VaR
+                } else if (Math.abs(var95) > 2000) {
+                    varEl.style.color = '#ffc107'; // Yellow - Medium VaR
+                } else {
+                    varEl.style.color = '#4caf50'; // Green - Low VaR
+                }
+
+                // Available Cash
+                const cashBalance = portfolioData.cash_balance || 0;
+                document.getElementById('availableCash').textContent =
+                    `R ${cashBalance.toLocaleString('en-ZA', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+
+                // Risk Capacity - Calculate from actual portfolio exposure
+                const portfolioValue = portfolioData.portfolio_value || 100000;
+                const exposurePct = data.portfolio_exposure_pct || 0;
+
+                // Max risk budget (in ZAR)
+                const maxRiskZar = portfolioValue * (dynamicRiskLimit / 100);
+
+                // Current risk exposure (assuming 2% stop loss per position on average)
+                const currentExposureZar = portfolioValue * (exposurePct / 100);
+                const avgStopLossPct = 0.02; // 2% average stop loss
+                const currentRiskZar = currentExposureZar * avgStopLossPct;
+
+                // Available risk capacity
+                const availableRiskZar = Math.max(0, maxRiskZar - currentRiskZar);
+                document.getElementById('riskCapacity').textContent =
+                    `R ${availableRiskZar.toLocaleString('en-ZA', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+
+                // Open Positions
+                const numPositions = data.num_open_positions || 0;
+                const maxPositions = 5; // From risk config
+                document.getElementById('openPositions').textContent =
+                    `${numPositions} / ${maxPositions}`;
+
+                // Color code positions
+                const positionsEl = document.getElementById('openPositions');
+                if (numPositions >= maxPositions) {
+                    positionsEl.style.color = '#f44336'; // Red - At limit
+                } else if (numPositions >= maxPositions * 0.8) {
+                    positionsEl.style.color = '#ffc107'; // Yellow - Near limit
+                } else {
+                    positionsEl.style.color = '#4caf50'; // Green - OK
+                }
+
+                // Daily P&L
+                const dailyPnl = data.daily_pnl_zar || 0;
+                const dailyPnlEl = document.getElementById('dailyPnl');
+                dailyPnlEl.textContent =
+                    `R ${dailyPnl.toLocaleString('en-ZA', {minimumFractionDigits: 0, maximumFractionDigits: 0})}`;
+
+                // Color code P&L
+                if (dailyPnl > 0) {
+                    dailyPnlEl.style.color = '#4caf50'; // Green - Profit
+                } else if (dailyPnl < 0) {
+                    dailyPnlEl.style.color = '#f44336'; // Red - Loss
+                } else {
+                    dailyPnlEl.style.color = '#ffc107'; // Yellow - Neutral
+                }
+
+            } catch (error) {
+                console.error('Error fetching risk dashboard:', error);
+                document.getElementById('dynamicRiskLimit').textContent = 'Error';
+                document.getElementById('riskRegime').textContent = 'Error';
+                document.getElementById('portfolioVolatility').textContent = 'Error';
+                document.getElementById('riskScore').textContent = 'Error';
+                document.getElementById('portfolioExposure').textContent = 'Error';
+                document.getElementById('var95').textContent = 'Error';
+                document.getElementById('availableCash').textContent = 'Error';
+                document.getElementById('riskCapacity').textContent = 'Error';
+                document.getElementById('openPositions').textContent = 'Error';
+                document.getElementById('dailyPnl').textContent = 'Error';
+            }
+        }
+
+        // Toggle all features display
+        function toggleAllFeatures() {
+            const container = document.getElementById('allFeaturesContainer');
+            const button = document.getElementById('toggleButtonText');
+            if (container.style.display === 'none') {
+                container.style.display = 'block';
+                button.textContent = '▼ Hide All Features';
+            } else {
+                container.style.display = 'none';
+                button.textContent = '▶ Show All Features';
+            }
+        }
+
+        // Fetch signal explanation (NEW - Enhanced)
+        async function fetchSignalExplanation() {
+            try {
+                const response = await fetch(`${API_BASE}/api/tier2/explain/BTCZAR`);
+                const data = await response.json();
+
+                // 1. Populate Signal Summary
+                const summaryContainer = document.getElementById('signalSummary');
+                const signal = data.prediction;
+                const confidence = (data.confidence * 100).toFixed(1);
+                const willExecute = data.will_execute;
+                const executionStatus = data.execution_status;
+
+                let signalColor = '#ffc107'; // HOLD yellow
+                if (signal === 'BUY') signalColor = '#4caf50'; // Green
+                if (signal === 'SELL') signalColor = '#f44336'; // Red
+
+                let statusColor = willExecute ? '#4caf50' : '#f44336';
+                let statusIcon = willExecute ? '✅' : '⚠️';
+
+                // Calculate weighted signal score for gauge
+                const bullishCount = data.all_features.filter(f => f.signal === 'bullish').length;
+                const bearishCount = data.all_features.filter(f => f.signal === 'bearish').length;
+                const neutralCount = data.all_features.filter(f => f.signal === 'neutral').length;
+                const totalFeatures = data.all_features.length;
+
+                // Map ML prediction to needle angle based on probabilities
+                // Use the ML model's actual prediction, not just indicator counts
+                let signalScore;
+                if (signal === 'BUY') {
+                    // Map buy probability to positive score (0 to +1)
+                    signalScore = data.probabilities.buy;
+                } else if (signal === 'SELL') {
+                    // Map sell probability to negative score (0 to -1)
+                    signalScore = -data.probabilities.sell;
+                } else {
+                    // HOLD - Use probability difference to show directional bias
+                    // If SELL prob > BUY prob, lean left (negative)
+                    // If BUY prob > SELL prob, lean right (positive)
+                    // Scale by 0.8 to keep within HOLD zone while still showing movement
+                    const probDiff = data.probabilities.buy - data.probabilities.sell;
+                    signalScore = probDiff * 0.8; // Range: -0.8 to +0.8 (stays in HOLD zone 60-120°)
+                }
+
+                // Map score to 0-180 degrees (INVERTED: 0°=BUY/right, 90°=HOLD/center, 180°=SELL/left)
+                // Since signalScore: -1 (SELL) to +1 (BUY), we need to invert the mapping
+                const needleAngle = 180 - ((signalScore + 1) / 2) * 180;
+
+                // Determine gauge color zones based on ML prediction
+                let gaugeColor = '#ffc107'; // Yellow for HOLD
+                if (signal === 'SELL') gaugeColor = '#f44336'; // Red for SELL
+                else if (signal === 'BUY') gaugeColor = '#4caf50'; // Green for BUY
+
+                summaryContainer.innerHTML = `
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 20px;">
+                        <div style="flex: 1; min-width: 300px;">
+                            <div style="font-size: 3em; font-weight: bold; color: ${signalColor}; margin-bottom: 10px;">
+                                ${signal}
+                            </div>
+                            <div style="font-size: 1.5em; opacity: 0.9;">
+                                Confidence: <strong>${confidence}%</strong>
+                            </div>
+                            <div style="font-size: 1em; opacity: 0.8; margin-top: 5px;">
+                                BUY: ${(data.probabilities.buy * 100).toFixed(1)}% |
+                                SELL: ${(data.probabilities.sell * 100).toFixed(1)}% |
+                                HOLD: ${(data.probabilities.hold * 100).toFixed(1)}%
+                            </div>
+                            <div style="margin-top: 15px; font-size: 0.9em; opacity: 0.9;">
+                                <strong>90 Indicators:</strong> ${bullishCount} Bullish | ${bearishCount} Bearish | ${neutralCount} Neutral
+                            </div>
+                        </div>
+
+                        <!-- 180-Degree Rev Meter Gauge -->
+                        <div style="text-align: center;">
+                            <svg width="300" height="180" viewBox="0 0 300 180" style="filter: drop-shadow(0 4px 8px rgba(0,0,0,0.3));">
+                                <!-- Background arc (RED zone 0-60°) -->
+                                <path d="M 30 150 A 120 120 0 0 1 90 45"
+                                      fill="none" stroke="#f44336" stroke-width="25" opacity="0.3"/>
+                                <!-- Middle arc (YELLOW zone 60-120°) -->
+                                <path d="M 90 45 A 120 120 0 0 1 210 45"
+                                      fill="none" stroke="#ffc107" stroke-width="25" opacity="0.3"/>
+                                <!-- Top arc (GREEN zone 120-180°) -->
+                                <path d="M 210 45 A 120 120 0 0 1 270 150"
+                                      fill="none" stroke="#4caf50" stroke-width="25" opacity="0.3"/>
+
+                                <!-- Active arc showing current signal strength -->
+                                <path d="M 30 150 A 120 120 0 ${needleAngle > 90 ? 1 : 0} 1 ${150 + 120 * Math.cos(needleAngle * Math.PI / 180)} ${150 - 120 * Math.sin(needleAngle * Math.PI / 180)}"
+                                      fill="none" stroke="${gaugeColor}" stroke-width="25" opacity="0.8"/>
+
+                                <!-- Center circle -->
+                                <circle cx="150" cy="150" r="15" fill="rgba(255,255,255,0.9)"/>
+
+                                <!-- Needle -->
+                                <line x1="150" y1="150"
+                                      x2="${150 + 110 * Math.cos(needleAngle * Math.PI / 180)}"
+                                      y2="${150 - 110 * Math.sin(needleAngle * Math.PI / 180)}"
+                                      stroke="${gaugeColor}" stroke-width="4" stroke-linecap="round"
+                                      style="transition: all 0.5s ease;"/>
+
+                                <!-- Labels -->
+                                <text x="30" y="170" fill="white" font-size="14" font-weight="bold">SELL</text>
+                                <text x="130" y="30" fill="white" font-size="14" font-weight="bold">HOLD</text>
+                                <text x="250" y="170" fill="white" font-size="14" font-weight="bold">BUY</text>
+                            </svg>
+                            <div style="margin-top: 10px; font-size: 1.2em; font-weight: bold; color: ${gaugeColor};">
+                                Signal Strength: ${(signalScore * 100).toFixed(1)}%
+                            </div>
+                        </div>
+
+                        <div style="text-align: right; min-width: 200px;">
+                            <div style="font-size: 2.5em; margin-bottom: 10px;">${statusIcon}</div>
+                            <div style="padding: 10px 20px; background: ${statusColor}; border-radius: 10px; font-weight: bold; font-size: 1.1em;">
+                                ${executionStatus}
+                            </div>
+                            <div style="font-size: 0.9em; opacity: 0.8; margin-top: 10px;">
+                                Threshold: ${(data.confidence_threshold * 100).toFixed(0)}%
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                // 2. Populate Top 8 Key Indicators
+                const indicatorsContainer = document.getElementById('signalExplanation');
+                if (!data.top_drivers || data.top_drivers.length === 0) {
+                    indicatorsContainer.innerHTML = '<div style="opacity: 0.6; padding: 20px; text-align: center;">No indicators available</div>';
+                } else {
+                    indicatorsContainer.innerHTML = data.top_drivers.map(indicator => {
+                        return `
+                            <div class="indicator-item ${indicator.signal}">
+                                <div style="flex: 1;">
+                                    <div class="indicator-name">${indicator.feature}</div>
+                                    <div class="indicator-interpretation">${indicator.interpretation}</div>
+                                </div>
+                                <div class="indicator-value">${indicator.value}</div>
+                            </div>
+                        `;
+                    }).join('');
+                }
+
+                // 3. Populate All 120 Features
+                const allFeaturesContainer = document.getElementById('allFeatures');
+                if (!data.all_features || data.all_features.length === 0) {
+                    allFeaturesContainer.innerHTML = '<div style="opacity: 0.6;">No features available</div>';
+                } else {
+                    // Group features by timeframe
+                    const features1m = data.all_features.filter(f => f.name.startsWith('1m_'));
+                    const features5m = data.all_features.filter(f => f.name.startsWith('5m_'));
+                    const features15m = data.all_features.filter(f => f.name.startsWith('15m_'));
+                    const features1h = data.all_features.filter(f => f.name.startsWith('1h_'));
+
+                    allFeaturesContainer.innerHTML = `
+                        <div style="margin-bottom: 20px; padding: 15px; background: rgba(33, 150, 243, 0.15); border-radius: 8px;">
+                            <strong>Total Features:</strong> ${data.all_features.length} |
+                            <strong>1m:</strong> ${features1m.length} |
+                            <strong>5m:</strong> ${features5m.length} |
+                            <strong>15m:</strong> ${features15m.length} |
+                            <strong>1h:</strong> ${features1h.length}
+                        </div>
+
+                        <h3 style="margin-top: 20px; margin-bottom: 10px; color: #4caf50;">1-Minute Features (${features1m.length})</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 10px;">
+                            ${features1m.map(f => {
+                                let borderColor = '#2196F3';
+                                let bgColor = 'rgba(0,0,0,0.2)';
+                                let signalIcon = '●';
+                                if (f.signal === 'bullish') {
+                                    borderColor = '#4caf50';
+                                    bgColor = 'rgba(76, 175, 80, 0.1)';
+                                    signalIcon = '▲';
+                                } else if (f.signal === 'bearish') {
+                                    borderColor = '#f44336';
+                                    bgColor = 'rgba(244, 67, 54, 0.1)';
+                                    signalIcon = '▼';
+                                } else if (f.signal === 'neutral') {
+                                    borderColor = '#ffc107';
+                                    bgColor = 'rgba(255, 193, 7, 0.05)';
+                                    signalIcon = '■';
+                                }
+                                const displayName = f.display_name || f.name;
+                                return `
+                                <div style="padding: 8px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 5px; font-size: 0.85em;">
+                                    <strong>${displayName}:</strong> ${typeof f.value === 'number' ? f.value.toFixed(6) : f.value}
+                                    <span style="float: right; color: ${borderColor}; font-weight: bold;">${signalIcon}</span>
+                                </div>
+                            `}).join('')}
+                        </div>
+
+                        <h3 style="margin-top: 20px; margin-bottom: 10px; color: #2196F3;">5-Minute Features (${features5m.length})</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 10px;">
+                            ${features5m.map(f => {
+                                let borderColor = '#2196F3';
+                                let bgColor = 'rgba(0,0,0,0.2)';
+                                let signalIcon = '●';
+                                if (f.signal === 'bullish') {
+                                    borderColor = '#4caf50';
+                                    bgColor = 'rgba(76, 175, 80, 0.1)';
+                                    signalIcon = '▲';
+                                } else if (f.signal === 'bearish') {
+                                    borderColor = '#f44336';
+                                    bgColor = 'rgba(244, 67, 54, 0.1)';
+                                    signalIcon = '▼';
+                                } else if (f.signal === 'neutral') {
+                                    borderColor = '#ffc107';
+                                    bgColor = 'rgba(255, 193, 7, 0.05)';
+                                    signalIcon = '■';
+                                }
+                                const displayName = f.display_name || f.name;
+                                return `
+                                <div style="padding: 8px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 5px; font-size: 0.85em;">
+                                    <strong>${displayName}:</strong> ${typeof f.value === 'number' ? f.value.toFixed(6) : f.value}
+                                    <span style="float: right; color: ${borderColor}; font-weight: bold;">${signalIcon}</span>
+                                </div>
+                            `}).join('')}
+                        </div>
+
+                        <h3 style="margin-top: 20px; margin-bottom: 10px; color: #ff9800;">15-Minute Features (${features15m.length})</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 10px;">
+                            ${features15m.map(f => {
+                                let borderColor = '#2196F3';
+                                let bgColor = 'rgba(0,0,0,0.2)';
+                                let signalIcon = '●';
+                                if (f.signal === 'bullish') {
+                                    borderColor = '#4caf50';
+                                    bgColor = 'rgba(76, 175, 80, 0.1)';
+                                    signalIcon = '▲';
+                                } else if (f.signal === 'bearish') {
+                                    borderColor = '#f44336';
+                                    bgColor = 'rgba(244, 67, 54, 0.1)';
+                                    signalIcon = '▼';
+                                } else if (f.signal === 'neutral') {
+                                    borderColor = '#ffc107';
+                                    bgColor = 'rgba(255, 193, 7, 0.05)';
+                                    signalIcon = '■';
+                                }
+                                const displayName = f.display_name || f.name;
+                                return `
+                                <div style="padding: 8px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 5px; font-size: 0.85em;">
+                                    <strong>${displayName}:</strong> ${typeof f.value === 'number' ? f.value.toFixed(6) : f.value}
+                                    <span style="float: right; color: ${borderColor}; font-weight: bold;">${signalIcon}</span>
+                                </div>
+                            `}).join('')}
+                        </div>
+
+                        <h3 style="margin-top: 20px; margin-bottom: 10px; color: #9c27b0;">1-Hour Features (${features1h.length})</h3>
+                        <div style="display: grid; grid-template-columns: repeat(auto-fill, minmax(350px, 1fr)); gap: 10px;">
+                            ${features1h.map(f => {
+                                let borderColor = '#2196F3';
+                                let bgColor = 'rgba(0,0,0,0.2)';
+                                let signalIcon = '●';
+                                if (f.signal === 'bullish') {
+                                    borderColor = '#4caf50';
+                                    bgColor = 'rgba(76, 175, 80, 0.1)';
+                                    signalIcon = '▲';
+                                } else if (f.signal === 'bearish') {
+                                    borderColor = '#f44336';
+                                    bgColor = 'rgba(244, 67, 54, 0.1)';
+                                    signalIcon = '▼';
+                                } else if (f.signal === 'neutral') {
+                                    borderColor = '#ffc107';
+                                    bgColor = 'rgba(255, 193, 7, 0.05)';
+                                    signalIcon = '■';
+                                }
+                                const displayName = f.display_name || f.name;
+                                // Add "Coming Soon" note for 1h features that are placeholders (value = 0)
+                                const isPlaceholder = typeof f.value === 'number' && f.value === 0;
+                                const valueDisplay = isPlaceholder ? '0.000000 (Coming Soon)' : (typeof f.value === 'number' ? f.value.toFixed(6) : f.value);
+                                return `
+                                <div style="padding: 8px; background: ${bgColor}; border-left: 4px solid ${borderColor}; border-radius: 5px; font-size: 0.85em;">
+                                    <strong>${displayName}:</strong> ${valueDisplay}
+                                    <span style="float: right; color: ${borderColor}; font-weight: bold;">${signalIcon}</span>
+                                </div>
+                            `}).join('')}
+                        </div>
+                    `;
+                }
+
+                // 4. Populate Timeframe Comparison Chart
+                const timeframeContainer = document.getElementById('timeframeComparison');
+                const features1m = data.all_features.filter(f => f.name.startsWith('1m_'));
+                const features5m = data.all_features.filter(f => f.name.startsWith('5m_'));
+                const features15m = data.all_features.filter(f => f.name.startsWith('15m_'));
+
+                // Calculate signal counts for each timeframe
+                const tf1m = {
+                    bullish: features1m.filter(f => f.signal === 'bullish').length,
+                    bearish: features1m.filter(f => f.signal === 'bearish').length,
+                    neutral: features1m.filter(f => f.signal === 'neutral').length
+                };
+                const tf5m = {
+                    bullish: features5m.filter(f => f.signal === 'bullish').length,
+                    bearish: features5m.filter(f => f.signal === 'bearish').length,
+                    neutral: features5m.filter(f => f.signal === 'neutral').length
+                };
+                const tf15m = {
+                    bullish: features15m.filter(f => f.signal === 'bullish').length,
+                    bearish: features15m.filter(f => f.signal === 'bearish').length,
+                    neutral: features15m.filter(f => f.signal === 'neutral').length
+                };
+
+                // Calculate scores for each timeframe
+                const score1m = (tf1m.bullish - tf1m.bearish) / features1m.length * 100;
+                const score5m = (tf5m.bullish - tf5m.bearish) / features5m.length * 100;
+                const score15m = (tf15m.bullish - tf15m.bearish) / features15m.length * 100;
+
+                timeframeContainer.innerHTML = `
+                    <!-- Explanation Table (Legend) -->
+                    <div style="margin-bottom: 30px; padding: 20px; background: rgba(33, 150, 243, 0.15); border: 2px solid rgba(33, 150, 243, 0.5); border-radius: 10px;">
+                        <h3 style="margin-bottom: 15px; color: #2196F3; text-align: center;">📖 What Do These Percentages Mean?</h3>
+
+                        <div style="margin-bottom: 15px; padding: 15px; background: rgba(0, 0, 0, 0.3); border-radius: 8px;">
+                            <strong style="color: #ffc107;">Formula:</strong>
+                            <code style="background: rgba(0,0,0,0.4); padding: 5px 10px; border-radius: 5px; margin-left: 10px; font-size: 1.1em;">
+                                (Bullish Indicators - Bearish Indicators) / 30 × 100%
+                            </code>
+                        </div>
+
+                        <div style="margin-bottom: 10px; padding: 10px; background: rgba(0, 0, 0, 0.2); border-radius: 5px;">
+                            <strong style="color: #fff;">This is NET INDICATOR BIAS - NOT price change!</strong>
+                        </div>
+
+                        <table style="width: 100%; border-collapse: collapse; margin-top: 15px;">
+                            <thead>
+                                <tr style="background: rgba(0, 0, 0, 0.3); border-bottom: 2px solid rgba(255, 255, 255, 0.3);">
+                                    <th style="padding: 10px; text-align: left;">Percentage Range</th>
+                                    <th style="padding: 10px; text-align: left;">Interpretation</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr style="background: rgba(76, 175, 80, 0.2);">
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>+50% or higher</strong></td>
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">🟢 Strong Bullish (15+ bullish vs 0 bearish)</td>
+                                </tr>
+                                <tr style="background: rgba(76, 175, 80, 0.1);">
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>+20% to +50%</strong></td>
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">🟢 Moderately Bullish (12-15 bullish vs 6-9 bearish)</td>
+                                </tr>
+                                <tr style="background: rgba(76, 175, 80, 0.05);">
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>+5% to +20%</strong></td>
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">🟡 Slightly Bullish (10-12 bullish vs 8-10 bearish)</td>
+                                </tr>
+                                <tr style="background: rgba(255, 193, 7, 0.1);">
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>-5% to +5%</strong></td>
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">⚪ Neutral/Balanced (Similar bullish and bearish counts)</td>
+                                </tr>
+                                <tr style="background: rgba(244, 67, 54, 0.05);">
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>-20% to -5%</strong></td>
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">🟡 Slightly Bearish (8-10 bullish vs 10-12 bearish)</td>
+                                </tr>
+                                <tr style="background: rgba(244, 67, 54, 0.1);">
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);"><strong>-50% to -20%</strong></td>
+                                    <td style="padding: 8px; border-bottom: 1px solid rgba(255,255,255,0.1);">🔴 Moderately Bearish (6-9 bullish vs 12-15 bearish)</td>
+                                </tr>
+                                <tr style="background: rgba(244, 67, 54, 0.2);">
+                                    <td style="padding: 8px;"><strong>-50% or lower</strong></td>
+                                    <td style="padding: 8px;">🔴 Strong Bearish (0 bullish vs 15+ bearish)</td>
+                                </tr>
+                            </tbody>
+                        </table>
+
+                        <div style="margin-top: 15px; padding: 12px; background: rgba(255, 193, 7, 0.15); border-left: 4px solid #ffc107; border-radius: 5px; font-size: 0.9em;">
+                            <strong>Example:</strong> If 15-MINUTE shows <strong>+13.3%</strong>, it means:<br>
+                            → Out of 30 indicators, 9 are bullish and 5 are bearish (net bias of 4 indicators)<br>
+                            → Calculation: (9 - 5) / 30 × 100% = 13.3%<br>
+                            → This is <strong>NOT</strong> saying "price rose 13.3% in 15 minutes"
+                        </div>
+                    </div>
+
+                    <!-- Timeframe Cards -->
+                    <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 20px;">
+                        <!-- 1-Minute Timeframe -->
+                        <div style="padding: 20px; background: rgba(76, 175, 80, 0.1); border: 2px solid #4caf50; border-radius: 10px;">
+                            <div style="text-align: center; font-size: 1.5em; font-weight: bold; color: #4caf50; margin-bottom: 15px;">
+                                1-MINUTE
+                            </div>
+                            <div style="text-align: center; font-size: 2.5em; font-weight: bold; color: ${score1m >= 0 ? '#4caf50' : '#f44336'}; margin-bottom: 10px;">
+                                ${score1m >= 0 ? '+' : ''}${score1m.toFixed(1)}%
+                            </div>
+                            <div style="margin-top: 15px;">
+                                <!-- Bullish Bar -->
+                                <div style="margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Bullish</span>
+                                        <span style="font-weight: bold;">${tf1m.bullish} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf1m.bullish / 30 * 100).toFixed(0)}%; background: #4caf50; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                                <!-- Bearish Bar -->
+                                <div style="margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Bearish</span>
+                                        <span style="font-weight: bold;">${tf1m.bearish} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf1m.bearish / 30 * 100).toFixed(0)}%; background: #f44336; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                                <!-- Neutral Bar -->
+                                <div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Neutral</span>
+                                        <span style="font-weight: bold;">${tf1m.neutral} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf1m.neutral / 30 * 100).toFixed(0)}%; background: #ffc107; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 5-Minute Timeframe -->
+                        <div style="padding: 20px; background: rgba(33, 150, 243, 0.1); border: 2px solid #2196F3; border-radius: 10px;">
+                            <div style="text-align: center; font-size: 1.5em; font-weight: bold; color: #2196F3; margin-bottom: 15px;">
+                                5-MINUTE
+                            </div>
+                            <div style="text-align: center; font-size: 2.5em; font-weight: bold; color: ${score5m >= 0 ? '#4caf50' : '#f44336'}; margin-bottom: 10px;">
+                                ${score5m >= 0 ? '+' : ''}${score5m.toFixed(1)}%
+                            </div>
+                            <div style="margin-top: 15px;">
+                                <!-- Bullish Bar -->
+                                <div style="margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Bullish</span>
+                                        <span style="font-weight: bold;">${tf5m.bullish} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf5m.bullish / 30 * 100).toFixed(0)}%; background: #4caf50; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                                <!-- Bearish Bar -->
+                                <div style="margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Bearish</span>
+                                        <span style="font-weight: bold;">${tf5m.bearish} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf5m.bearish / 30 * 100).toFixed(0)}%; background: #f44336; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                                <!-- Neutral Bar -->
+                                <div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Neutral</span>
+                                        <span style="font-weight: bold;">${tf5m.neutral} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf5m.neutral / 30 * 100).toFixed(0)}%; background: #ffc107; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 15-Minute Timeframe -->
+                        <div style="padding: 20px; background: rgba(255, 152, 0, 0.1); border: 2px solid #ff9800; border-radius: 10px;">
+                            <div style="text-align: center; font-size: 1.5em; font-weight: bold; color: #ff9800; margin-bottom: 15px;">
+                                15-MINUTE
+                            </div>
+                            <div style="text-align: center; font-size: 2.5em; font-weight: bold; color: ${score15m >= 0 ? '#4caf50' : '#f44336'}; margin-bottom: 10px;">
+                                ${score15m >= 0 ? '+' : ''}${score15m.toFixed(1)}%
+                            </div>
+                            <div style="margin-top: 15px;">
+                                <!-- Bullish Bar -->
+                                <div style="margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Bullish</span>
+                                        <span style="font-weight: bold;">${tf15m.bullish} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf15m.bullish / 30 * 100).toFixed(0)}%; background: #4caf50; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                                <!-- Bearish Bar -->
+                                <div style="margin-bottom: 8px;">
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Bearish</span>
+                                        <span style="font-weight: bold;">${tf15m.bearish} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf15m.bearish / 30 * 100).toFixed(0)}%; background: #f44336; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                                <!-- Neutral Bar -->
+                                <div>
+                                    <div style="display: flex; justify-content: space-between; font-size: 0.85em; margin-bottom: 3px;">
+                                        <span>Neutral</span>
+                                        <span style="font-weight: bold;">${tf15m.neutral} / 30</span>
+                                    </div>
+                                    <div style="width: 100%; height: 20px; background: rgba(0,0,0,0.3); border-radius: 10px; overflow: hidden;">
+                                        <div style="height: 100%; width: ${(tf15m.neutral / 30 * 100).toFixed(0)}%; background: #ffc107; transition: width 0.5s ease;"></div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+            } catch (error) {
+                document.getElementById('signalSummary').innerHTML = '<div style="opacity: 0.6;">Error loading signal</div>';
+                document.getElementById('signalExplanation').innerHTML = '<div style="opacity: 0.6;">Error loading explanation</div>';
+                document.getElementById('allFeatures').innerHTML = '<div style="opacity: 0.6;">Error loading features</div>';
+                document.getElementById('timeframeComparison').innerHTML = '<div style="opacity: 0.6;">Error loading timeframe comparison</div>';
+                console.error('Error fetching signal explanation:', error);
+            }
+        }
+
+        // Fetch trade decisions (NEW)
+        async function fetchTradeDecisions() {
+            try {
+                const response = await fetch(`${API_BASE}/api/autonomous-engine/trade-decisions?limit=20`);
+                const data = await response.json();
+
+                const container = document.getElementById('tradeDecisions');
+
+                if (data.decisions.length === 0) {
+                    container.innerHTML = '<div style="opacity: 0.6; padding: 20px; text-align: center;">No trade decisions yet</div>';
+                    return;
+                }
+
+                container.innerHTML = data.decisions.map(d => {
+                    const timestamp = new Date(d.created_at).toLocaleString();
+                    const statusClass = d.status.toLowerCase();
+
+                    return `
+                        <div class="decision-item ${statusClass}">
+                            <div class="decision-header">
+                                <div>
+                                    <div class="decision-signal ${d.signal.toLowerCase()}">
+                                        ${d.pair} ${d.signal}
+                                    </div>
+                                    <div style="font-size: 0.85em; opacity: 0.8; margin-top: 3px;">
+                                        ${timestamp}
+                                    </div>
+                                </div>
+                                <div class="decision-status ${statusClass}">
+                                    ${d.status}
+                                </div>
+                            </div>
+                            <div class="decision-details">
+                                <strong>ML Confidence:</strong> ${((d.ml_confidence || 0) * 100).toFixed(1)}% |
+                                <strong>Position Size:</strong> R${(d.position_size_zar || 0).toLocaleString()} |
+                                <strong>Leverage:</strong> ${d.leverage || 1}x
+                            </div>
+                            ${d.rejected_by ? `
+                                <div class="rejected-by">Rejected by: ${d.rejected_by}</div>
+                            ` : ''}
+                            ${d.reason ? `
+                                <div class="decision-reason">
+                                    <strong>Reason:</strong> ${d.reason}
+                                </div>
+                            ` : ''}
+                            ${d.llm_rejection_reasoning ? `
+                                <div class="decision-reason">
+                                    <strong>LLM Reasoning:</strong> ${d.llm_rejection_reasoning}
+                                </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                document.getElementById('tradeDecisions').innerHTML = '<div style="opacity: 0.6;">Error loading trade decisions</div>';
+                console.error('Error fetching trade decisions:', error);
+            }
+        }
+
+        // Fetch open positions
+        async function fetchOpenPositions() {
+            try {
+                const response = await fetch(`${API_BASE}/api/portfolio/positions`);
+                const data = await response.json();
+                const positions = data.positions || [];
+
+                const container = document.getElementById('openPositionsList');
+                const openPositions = positions.filter(p => p.status === 'OPEN');
+
+                if (openPositions.length === 0) {
+                    container.innerHTML = '<div style="opacity: 0.6; padding: 20px; text-align: center;">No open positions</div>';
+                    return;
+                }
+
+                container.innerHTML = openPositions.map(p => {
+                    const entryPrice = p.entry_price || 0;
+                    const currentPrice = p.current_price || 0;
+                    const pnl = p.pnl_pct || 0;
+                    return `
+                        <div class="trade-item ${(p.signal || 'hold').toLowerCase()}">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                <span style="font-weight: bold;">${p.pair || 'UNKNOWN'} ${p.signal || 'UNKNOWN'}</span>
+                                <span style="color: ${pnl >= 0 ? '#4caf50' : '#f44336'}; font-weight: bold;">
+                                    ${pnl >= 0 ? '+' : ''}${pnl.toFixed(2)}%
+                                </span>
+                            </div>
+                            <div style="font-size: 0.85em; opacity: 0.8;">
+                                Entry: R${entryPrice.toLocaleString()} | Current: R${currentPrice.toLocaleString()}
+                            </div>
+                            <div style="font-size: 0.85em; opacity: 0.8;">
+                                SL: ${(p.stop_loss_pct || 0).toFixed(1)}% | TP: ${(p.take_profit_pct || 0).toFixed(1)}%
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                document.getElementById('openPositionsList').innerHTML = '<div style="opacity: 0.6;">Error loading positions</div>';
+            }
+        }
+
+        // Fetch recent activity
+        async function fetchRecentActivity() {
+            try {
+                const response = await fetch(`${API_BASE}/api/portfolio/positions`);
+                const data = await response.json();
+                const positions = data.positions || [];
+
+                const container = document.getElementById('recentTrades');
+
+                if (positions.length === 0) {
+                    container.innerHTML = '<div style="opacity: 0.6; padding: 20px; text-align: center;">No activity yet</div>';
+                    return;
+                }
+
+                const recent = positions.sort((a, b) => new Date(b.opened_at) - new Date(a.opened_at)).slice(0, 10);
+
+                container.innerHTML = recent.map(p => {
+                    const pnlZar = p.pnl || 0;
+                    return `
+                        <div class="trade-item ${(p.signal || 'hold').toLowerCase()}">
+                            <div style="display: flex; justify-content: space-between; margin-bottom: 5px;">
+                                <span style="font-weight: bold;">${p.pair || 'UNKNOWN'} ${p.signal || 'UNKNOWN'}</span>
+                                <span style="background: rgba(255,255,255,0.2); padding: 2px 8px; border-radius: 4px; font-size: 0.85em;">
+                                    ${p.status || 'UNKNOWN'}
+                                </span>
+                            </div>
+                            <div style="font-size: 0.85em; opacity: 0.8;">
+                                ${p.opened_at ? new Date(p.opened_at).toLocaleString() : 'Unknown time'}
+                            </div>
+                            ${p.status !== 'OPEN' ? `
+                            <div style="font-size: 0.85em; margin-top: 5px;">
+                                P&L: <span style="color: ${pnlZar >= 0 ? '#4caf50' : '#f44336'}; font-weight: bold;">
+                                    R${pnlZar.toFixed(2)}
+                                </span>
+                            </div>
+                            ` : ''}
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                document.getElementById('recentTrades').innerHTML = '<div style="opacity: 0.6;">Error loading activity</div>';
+            }
+        }
+
+        // Fetch closed trades
+        async function fetchClosedTrades() {
+            try {
+                const response = await fetch(`${API_BASE}/api/portfolio/positions?status=ALL`);
+                const data = await response.json();
+                const positions = data.positions || [];
+
+                // Filter for closed trades (all closed statuses)
+                const closedTrades = positions.filter(p =>
+                    p.status === 'TAKE_PROFIT' ||
+                    p.status === 'STOP_LOSS' ||
+                    p.status === 'TIMEOUT' ||
+                    p.status === 'CLOSED'
+                );
+
+                // Calculate statistics
+                const totalTrades = closedTrades.length;
+                const winningTrades = closedTrades.filter(p => (p.pnl || 0) > 0).length;
+                const winRate = totalTrades > 0 ? (winningTrades / totalTrades * 100) : 0;
+                const totalPnL = closedTrades.reduce((sum, p) => sum + (p.pnl || 0), 0);
+                const avgPnL = totalTrades > 0 ? totalPnL / totalTrades : 0;
+
+                // Update stats
+                document.getElementById('totalClosedTrades').textContent = totalTrades;
+                document.getElementById('winRate').textContent = `${winRate.toFixed(1)}%`;
+                document.getElementById('winRate').style.color = winRate >= 50 ? '#4caf50' : '#f44336';
+
+                const totalPnLEl = document.getElementById('totalPnL');
+                totalPnLEl.textContent = `R${totalPnL.toFixed(2)}`;
+                totalPnLEl.style.color = totalPnL >= 0 ? '#4caf50' : '#f44336';
+
+                const avgPnLEl = document.getElementById('avgPnL');
+                avgPnLEl.textContent = `R${avgPnL.toFixed(2)}`;
+                avgPnLEl.style.color = avgPnL >= 0 ? '#4caf50' : '#f44336';
+
+                const container = document.getElementById('closedTradesList');
+
+                if (closedTrades.length === 0) {
+                    container.innerHTML = '<div style="opacity: 0.6; padding: 20px; text-align: center;">No closed trades yet</div>';
+                    return;
+                }
+
+                // Sort by exit time (most recent first) - use closed_at or updated_at or opened_at
+                const sorted = closedTrades.sort((a, b) =>
+                    new Date(b.closed_at || b.updated_at || b.opened_at) - new Date(a.closed_at || a.updated_at || a.opened_at)
+                );
+
+                container.innerHTML = sorted.map(p => {
+                    const pnlZar = p.pnl || 0;
+                    const pnlPct = p.pnl_pct || 0;
+                    const entryPrice = p.entry_price || 0;
+                    const exitPrice = p.exit_price || p.current_price || 0;
+                    const isWin = pnlZar > 0;
+
+                    return `
+                        <div class="trade-item" style="border-left: 4px solid ${isWin ? '#4caf50' : '#f44336'};">
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
+                                <div>
+                                    <span style="font-weight: bold; font-size: 1.1em;">${p.pair || 'UNKNOWN'}</span>
+                                    <span style="background: ${p.signal === 'BUY' ? 'rgba(76, 175, 80, 0.3)' : 'rgba(244, 67, 54, 0.3)'};
+                                                 padding: 3px 8px; border-radius: 4px; font-size: 0.85em; margin-left: 8px;">
+                                        ${p.signal || 'UNKNOWN'}
+                                    </span>
+                                </div>
+                                <div style="text-align: right;">
+                                    <div style="font-weight: bold; font-size: 1.2em; color: ${isWin ? '#4caf50' : '#f44336'};">
+                                        ${pnlZar >= 0 ? '+' : ''}R${pnlZar.toFixed(2)}
+                                    </div>
+                                    <div style="font-size: 0.85em; color: ${isWin ? '#4caf50' : '#f44336'};">
+                                        ${pnlPct >= 0 ? '+' : ''}${pnlPct.toFixed(2)}%
+                                    </div>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em; opacity: 0.9;">
+                                <div>
+                                    <div style="opacity: 0.7;">Entry Price</div>
+                                    <div style="font-weight: 500;">R${entryPrice.toLocaleString()}</div>
+                                </div>
+                                <div>
+                                    <div style="opacity: 0.7;">Exit Price</div>
+                                    <div style="font-weight: 500;">R${exitPrice.toLocaleString()}</div>
+                                </div>
+                            </div>
+                            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 0.85em; opacity: 0.9; margin-top: 8px;">
+                                <div>
+                                    <div style="opacity: 0.7;">Entry Time</div>
+                                    <div style="font-size: 0.8em;">${p.opened_at ? new Date(p.opened_at).toLocaleString() : 'Unknown'}</div>
+                                </div>
+                                <div>
+                                    <div style="opacity: 0.7;">Exit Time</div>
+                                    <div style="font-size: 0.8em;">${p.closed_at ? new Date(p.closed_at).toLocaleString() : (p.updated_at ? new Date(p.updated_at).toLocaleString() : 'Unknown')}</div>
+                                </div>
+                            </div>
+                            <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid rgba(255,255,255,0.1); font-size: 0.85em;">
+                                <span style="background: ${p.status === 'TAKE_PROFIT' ? 'rgba(76, 175, 80, 0.2)' : 'rgba(244, 67, 54, 0.2)'};
+                                             padding: 3px 8px; border-radius: 4px;">
+                                    ${p.status || 'UNKNOWN'}: ${p.close_reason || 'Unknown reason'}
+                                </span>
+                            </div>
+                        </div>
+                    `;
+                }).join('');
+            } catch (error) {
+                console.error('Error loading closed trades:', error);
+                document.getElementById('closedTradesList').innerHTML = '<div style="opacity: 0.6;">Error loading closed trades</div>';
+            }
+        }
+
+        // Start engine
+        async function startEngine() {
+            try {
+                const response = await fetch(`${API_BASE}/api/autonomous-engine/start`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        trading_mode: 'PAPER',
+                        pairs: ['BTCZAR', 'ETHZAR', 'SOLZAR'],
+                        auto_trading_enabled: false
+                    })
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to start engine');
+                }
+
+                const data = await response.json();
+                addLog('Engine STARTED in PAPER mode', 'success');
+                await fetchEngineStatus();
+            } catch (error) {
+                addLog(`Error starting engine: ${error.message}`, 'error');
+                alert(`Failed to start engine: ${error.message}`);
+            }
+        }
+
+        // Stop engine
+        async function stopEngine() {
+            try {
+                if (!confirm('Are you sure you want to stop the trading engine?')) {
+                    return;
+                }
+
+                const response = await fetch(`${API_BASE}/api/autonomous-engine/stop`, {
+                    method: 'POST'
+                });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to stop engine');
+                }
+
+                const data = await response.json();
+                addLog('Engine STOPPED', 'error');
+                await fetchEngineStatus();
+            } catch (error) {
+                addLog(`Error stopping engine: ${error.message}`, 'error');
+                alert(`Failed to stop engine: ${error.message}`);
+            }
+        }
+
+        // Enable trading
+        async function enableTrading() {
+            try {
+                const response = await fetch(`${API_BASE}/api/autonomous-engine/auto-trading/enable`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                addLog('Auto-trading ENABLED', 'success');
+                await fetchEngineStatus();
+            } catch (error) {
+                addLog(`Error enabling trading: ${error.message}`, 'error');
+            }
+        }
+
+        // Disable trading
+        async function disableTrading() {
+            try {
+                const response = await fetch(`${API_BASE}/api/autonomous-engine/auto-trading/disable`, {
+                    method: 'POST'
+                });
+                const data = await response.json();
+                addLog('Auto-trading DISABLED', 'error');
+                await fetchEngineStatus();
+            } catch (error) {
+                addLog(`Error disabling trading: ${error.message}`, 'error');
+            }
+        }
+
+        // Mode Switching Functions
+        async function switchMode(targetMode) {
+            const statusEl = document.getElementById('modeSwitchStatus');
+
+            try {
+                // Show confirmation for LIVE mode
+                if (targetMode === 'LIVE') {
+                    const confirmed = confirm(
+                        '⚠️ WARNING: Switching to LIVE mode!\n\n' +
+                        'This will enable REAL MONEY trading on your VALR account.\n' +
+                        'All trades will use actual funds.\n\n' +
+                        'Are you sure you want to continue?'
+                    );
+
+                    if (!confirmed) {
+                        statusEl.textContent = 'LIVE mode switch cancelled';
+                        statusEl.style.color = '#ffc107';
+                        setTimeout(() => statusEl.textContent = '', 3000);
+                        return;
+                    }
+                }
+
+                statusEl.textContent = `Switching to ${targetMode} mode...`;
+                statusEl.style.color = '#2196F3';
+
+                const response = await fetch(`${API_BASE}/api/mode/set`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        mode: targetMode,
+                        confirmed: true,
+                        reason: `Dashboard mode switch to ${targetMode}`
+                    })
+                });
+
+                if (!response.ok) {
+                    throw new Error(`HTTP ${response.status}`);
+                }
+
+                const data = await response.json();
+
+                statusEl.textContent = `✓ Successfully switched to ${targetMode} mode`;
+                statusEl.style.color = '#4CAF50';
+
+                addLog(`Trading mode switched to ${targetMode}`, targetMode === 'LIVE' ? 'error' : 'success');
+
+                // Update current mode display
+                await updateControlPanel();
+
+                setTimeout(() => statusEl.textContent = '', 5000);
+
+            } catch (error) {
+                statusEl.textContent = `✗ Error: ${error.message}`;
+                statusEl.style.color = '#f44336';
+                addLog(`Failed to switch mode: ${error.message}`, 'error');
+            }
+        }
+
+        // Update Control Panel Data
+        async function updateControlPanel() {
+            try {
+                // Get current mode
+                const modeResponse = await fetch(`${API_BASE}/api/mode/current`);
+                const modeData = await modeResponse.json();
+
+                const currentMode = modeData.mode || 'UNKNOWN';
+                const modeEl = document.getElementById('currentMode');
+                modeEl.textContent = currentMode;
+
+                // Color code the mode
+                if (currentMode === 'LIVE') {
+                    modeEl.style.color = '#f44336';
+                } else if (currentMode === 'PAPER') {
+                    modeEl.style.color = '#4CAF50';
+                } else {
+                    modeEl.style.color = '#ffc107';
+                }
+
+                // Update button states
+                document.getElementById('switchToPaperBtn').disabled = (currentMode === 'PAPER');
+                document.getElementById('switchToLiveBtn').disabled = (currentMode === 'LIVE');
+
+                // Get WebSocket stats (if available)
+                try {
+                    const wsResponse = await fetch(`${API_BASE}/api/system/websocket-stats`);
+                    const wsData = await wsResponse.json();
+
+                    document.getElementById('wsConnection').textContent =
+                        wsData.connected ? '✓ Connected' : '✗ Disconnected';
+                    document.getElementById('wsConnection').style.color =
+                        wsData.connected ? '#4CAF50' : '#f44336';
+
+                    document.getElementById('wsExecMethod').textContent =
+                        wsData.last_execution_method || 'N/A';
+
+                    document.getElementById('wsExecTime').textContent =
+                        wsData.avg_execution_time_ms ? `${wsData.avg_execution_time_ms}ms` : 'N/A';
+
+                    document.getElementById('wsOrderCount').textContent =
+                        wsData.websocket_orders || '0';
+                } catch (error) {
+                    // WebSocket stats endpoint might not exist yet
+                    document.getElementById('wsConnection').textContent = 'N/A';
+                    document.getElementById('wsExecMethod').textContent = currentMode === 'LIVE' ? 'WebSocket' : 'PAPER';
+                    document.getElementById('wsExecTime').textContent = 'N/A';
+                    document.getElementById('wsOrderCount').textContent = '0';
+                }
+
+            } catch (error) {
+                console.error('Error updating control panel:', error);
+            }
+        }
+
+        // Execute Test Trade
+        async function executeTestTrade() {
+            const resultsDiv = document.getElementById('testResults');
+            const resultsContent = document.getElementById('testResultsContent');
+
+            try {
+                const pair = document.getElementById('testPair').value;
+                const side = document.getElementById('testSide').value;
+                const quantity = parseFloat(document.getElementById('testQuantity').value);
+
+                if (isNaN(quantity) || quantity <= 0) {
+                    alert('Please enter a valid quantity');
+                    return;
+                }
+
+                // Get current mode
+                const modeResponse = await fetch(`${API_BASE}/api/mode/current`);
+                const modeData = await modeResponse.json();
+                const currentMode = modeData.mode || 'UNKNOWN';
+
+                // Extra confirmation for LIVE mode
+                if (currentMode === 'LIVE') {
+                    const confirmed = confirm(
+                        `⚠️ LIVE MODE TRADE ⚠️\n\n` +
+                        `This will execute a REAL trade on your VALR account:\n\n` +
+                        `Pair: ${pair}\n` +
+                        `Side: ${side}\n` +
+                        `Quantity: ${quantity}\n\n` +
+                        `This uses REAL MONEY. Continue?`
+                    );
+
+                    if (!confirmed) {
+                        return;
+                    }
+                }
+
+                resultsContent.textContent = 'Executing test trade...';
+                resultsDiv.style.display = 'block';
+
+                // Execute the trade through the execution router
+                const response = await fetch(`${API_BASE}/api/trading/order/market`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        pair: pair,
+                        side: side,
+                        quantity: quantity,
+                        metadata: {
+                            test: true,
+                            source: 'dashboard',
+                            timestamp: new Date().toISOString()
+                        }
+                    })
+                });
+
+                const result = await response.json();
+
+                // Format results
+                let output = `Test Trade Executed (${currentMode} mode)\n\n`;
+                output += `Success: ${result.success ? '✓ YES' : '✗ NO'}\n`;
+                output += `Order ID: ${result.order_id || 'N/A'}\n`;
+                output += `Pair: ${pair}\n`;
+                output += `Side: ${side}\n`;
+                output += `Quantity: ${result.quantity || quantity}\n`;
+                output += `Fill Price: R${(result.fill_price || 0).toLocaleString()}\n`;
+                output += `Total Cost: R${(result.total_cost || 0).toFixed(2)}\n`;
+                output += `Fee: R${(result.fee || 0).toFixed(4)}\n`;
+                output += `Client Type: ${result.client_type || 'N/A'}\n`;
+                output += `Routed Via: ${result.routed_via || 'N/A'}\n`;
+
+                if (result.via) {
+                    output += `\nExecution Method: ${result.via.toUpperCase()}\n`;
+                    if (result.via === 'websocket') {
+                        output += `⚡ Used WebSocket (2-3x faster)\n`;
+                    }
+                }
+
+                if (result.safety_checked) {
+                    output += `\nSafety Check: ${result.safety_status || 'N/A'}\n`;
+                }
+
+                if (!result.success && result.error) {
+                    output += `\nError: ${result.error}\n`;
+                }
+
+                resultsContent.textContent = output;
+
+                addLog(`Test trade executed: ${side} ${quantity} ${pair}`,
+                       result.success ? 'success' : 'error');
+
+                // Refresh portfolio and control panel
+                await fetchPortfolio();
+                await updateControlPanel();
+
+            } catch (error) {
+                resultsContent.textContent = `Error executing test trade:\n${error.message}`;
+                addLog(`Test trade failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Store chart instance globally to update it
+        let unifiedChartInstance = null;
+
+        // Fetch and render unified prediction signal chart
+        async function fetchMultiTimeframeSignals() {
+            try {
+                const response = await fetch(`${API_BASE}/api/tier2/predictions/BTCZAR/multi-timeframe?hours=24`);
+                const data = await response.json();
+
+                // Use 1m data (they're all the same anyway, so just use the first one)
+                renderSignalChart(data.timeframes['1m'], 'unified', '#4caf50');
+                renderTimeframeStats(data.timeframes['1m'], 'stats-unified');
+            } catch (error) {
+                console.error('Error fetching prediction signals:', error);
+                const ctx = document.getElementById('chart-unified');
+                if (ctx) {
+                    ctx.parentElement.innerHTML = '<div style="padding: 20px; text-align: center; opacity: 0.6;">Error loading prediction signals</div>';
+                }
+            }
+        }
+
+        // Render a single timeframe signal chart
+        function renderSignalChart(timeframeData, timeframe, color) {
+            const canvasId = `chart-${timeframe}`;
+            const canvas = document.getElementById(canvasId);
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const signals = timeframeData.signals || [];
+
+            // Prepare data
+            const labels = signals.map(s => new Date(s.timestamp));
+            const buySignals = signals.map(s => s.prediction === 'BUY' ? s.confidence : null);
+            const sellSignals = signals.map(s => s.prediction === 'SELL' ? s.confidence : null);
+            const holdSignals = signals.map(s => s.prediction === 'HOLD' ? s.confidence : null);
+
+            // Destroy existing chart if it exists
+            if (unifiedChartInstance) {
+                unifiedChartInstance.destroy();
+            }
+
+            // Create new chart
+            unifiedChartInstance = new Chart(ctx, {
+                type: 'scatter',
+                data: {
+                    labels: labels,
+                    datasets: [
+                        {
+                            label: 'BUY',
+                            data: buySignals.map((conf, idx) => conf !== null ? { x: labels[idx], y: conf } : null).filter(p => p !== null),
+                            borderColor: 'rgb(34, 197, 94)',
+                            backgroundColor: 'rgba(34, 197, 94, 0.8)',
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        },
+                        {
+                            label: 'SELL',
+                            data: sellSignals.map((conf, idx) => conf !== null ? { x: labels[idx], y: conf } : null).filter(p => p !== null),
+                            borderColor: 'rgb(239, 68, 68)',
+                            backgroundColor: 'rgba(239, 68, 68, 0.8)',
+                            pointRadius: 6,
+                            pointHoverRadius: 8
+                        },
+                        {
+                            label: 'HOLD',
+                            data: holdSignals.map((conf, idx) => conf !== null ? { x: labels[idx], y: conf } : null).filter(p => p !== null),
+                            borderColor: 'rgb(156, 163, 175)',
+                            backgroundColor: 'rgba(156, 163, 175, 0.6)',
+                            pointRadius: 3,
+                            pointHoverRadius: 5
+                        }
+                    ]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            display: true,
+                            position: 'top',
+                            labels: {
+                                color: '#fff',
+                                font: { size: 11 }
+                            }
+                        },
+                        tooltip: {
+                            callbacks: {
+                                label: function(context) {
+                                    const label = context.dataset.label || '';
+                                    const conf = (context.parsed.y * 100).toFixed(1);
+                                    return `${label}: ${conf}% confidence`;
+                                }
+                            }
+                        }
+                    },
+                    scales: {
+                        x: {
+                            type: 'time',
+                            time: {
+                                unit: 'hour',
+                                displayFormats: {
+                                    hour: 'HH:mm'
+                                }
+                            },
+                            ticks: {
+                                color: '#fff',
+                                maxTicksLimit: 8,
+                                font: { size: 9 }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        },
+                        y: {
+                            beginAtZero: true,
+                            max: 1,
+                            ticks: {
+                                color: '#fff',
+                                callback: function(value) {
+                                    return (value * 100).toFixed(0) + '%';
+                                },
+                                font: { size: 9 }
+                            },
+                            grid: {
+                                color: 'rgba(255, 255, 255, 0.1)'
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Render timeframe statistics
+        function renderTimeframeStats(timeframeData, containerId) {
+            const stats = timeframeData.stats || {};
+            const container = document.getElementById(containerId);
+            if (!container) return;
+
+            container.innerHTML = `
+                <div style="display: flex; justify-content: space-around; text-align: center; padding: 10px; background: rgba(0,0,0,0.3); border-radius: 8px;">
+                    <div>
+                        <div style="opacity: 0.8; font-size: 0.85em;">Total</div>
+                        <div style="font-weight: bold; font-size: 1.1em;">${stats.total || 0}</div>
+                    </div>
+                    <div style="color: #4caf50;">
+                        <div style="opacity: 0.8; font-size: 0.85em;">BUY</div>
+                        <div style="font-weight: bold; font-size: 1.1em;">${stats.buy_count || 0} (${(stats.buy_pct || 0).toFixed(1)}%)</div>
+                    </div>
+                    <div style="color: #f44336;">
+                        <div style="opacity: 0.8; font-size: 0.85em;">SELL</div>
+                        <div style="font-weight: bold; font-size: 1.1em;">${stats.sell_count || 0} (${(stats.sell_pct || 0).toFixed(1)}%)</div>
+                    </div>
+                    <div style="color: #ffc107;">
+                        <div style="opacity: 0.8; font-size: 0.85em;">HOLD</div>
+                        <div style="font-weight: bold; font-size: 1.1em;">${stats.hold_count || 0} (${(stats.hold_pct || 0).toFixed(1)}%)</div>
+                    </div>
+                </div>
+            `;
+        }
+
+        // Fetch and display recent predictions (unique only with time since last duplicate)
+        async function fetchRecentPredictions() {
+            try {
+                const response = await fetch(`${API_BASE}/api/tier2/predictions/BTCZAR/multi-timeframe?hours=24`);
+                const data = await response.json();
+
+                const container = document.getElementById('recentPredictionsTable');
+
+                // Get the signals from the 1m timeframe (they're all the same)
+                const signals = data.timeframes['1m'].signals || [];
+
+                if (signals.length === 0) {
+                    container.innerHTML = '<div style="opacity: 0.6; padding: 20px; text-align: center;">No predictions available yet</div>';
+                    return;
+                }
+
+                // Process signals to find unique predictions and track duplicates
+                const uniqueSignalsMap = new Map(); // key -> latest signal object
+                const duplicateTimestamps = new Map(); // key -> array of all timestamps
+
+                // Create a unique key for each prediction based on signal and probabilities
+                const createSignalKey = (signal) => {
+                    const buyPct = (signal.probabilities.buy * 100).toFixed(1);
+                    const sellPct = (signal.probabilities.sell * 100).toFixed(1);
+                    const holdPct = (signal.probabilities.hold * 100).toFixed(1);
+                    return `${signal.prediction}-${buyPct}-${sellPct}-${holdPct}`;
+                };
+
+                // First pass: group signals by unique key and collect all timestamps
+                signals.forEach(signal => {
+                    const key = createSignalKey(signal);
+                    const timestamp = new Date(signal.timestamp);
+
+                    if (!duplicateTimestamps.has(key)) {
+                        duplicateTimestamps.set(key, []);
+                    }
+                    duplicateTimestamps.get(key).push(timestamp);
+
+                    // Keep only the latest signal for each unique key
+                    if (!uniqueSignalsMap.has(key) || timestamp > new Date(uniqueSignalsMap.get(key).timestamp)) {
+                        uniqueSignalsMap.set(key, signal);
+                    }
+                });
+
+                // Convert to array and sort by timestamp (most recent first)
+                const uniqueSignals = Array.from(uniqueSignalsMap.values())
+                    .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp))
+                    .slice(0, 20); // Take top 20 unique signals
+
+                // Calculate time since last duplicate for each signal
+                const signalsWithDuplicateInfo = uniqueSignals.map(signal => {
+                    const key = createSignalKey(signal);
+                    const allTimestamps = duplicateTimestamps.get(key).sort((a, b) => b - a); // Sort descending
+                    const latestTimestamp = allTimestamps[0];
+                    const previousTimestamp = allTimestamps.length > 1 ? allTimestamps[1] : null;
+
+                    let timeSinceDuplicate = null;
+                    if (previousTimestamp) {
+                        const diffMs = latestTimestamp - previousTimestamp;
+                        const diffMinutes = Math.floor(diffMs / 60000);
+                        const diffHours = Math.floor(diffMinutes / 60);
+                        const remainingMinutes = diffMinutes % 60;
+
+                        if (diffHours > 0) {
+                            timeSinceDuplicate = `${diffHours}h ${remainingMinutes}m ago`;
+                        } else {
+                            timeSinceDuplicate = `${diffMinutes}m ago`;
+                        }
+                    } else {
+                        timeSinceDuplicate = 'First occurrence';
+                    }
+
+                    return {
+                        ...signal,
+                        timeSinceDuplicate,
+                        duplicateCount: allTimestamps.length
+                    };
+                });
+
+                // Build the table
+                let tableHTML = `
+                    <div style="margin-bottom: 15px; padding: 12px; background: rgba(33, 150, 243, 0.15); border-radius: 8px; font-size: 0.9em;">
+                        <strong>Showing ${signalsWithDuplicateInfo.length} unique predictions</strong> (out of ${signals.length} total predictions)
+                    </div>
+                    <div style="overflow-x: auto;">
+                        <table style="width: 100%; border-collapse: collapse; font-size: 0.9em;">
+                            <thead>
+                                <tr style="background: rgba(0, 0, 0, 0.3); border-bottom: 2px solid rgba(255, 255, 255, 0.3);">
+                                    <th style="padding: 12px; text-align: left;">#</th>
+                                    <th style="padding: 12px; text-align: left;">Latest Timestamp</th>
+                                    <th style="padding: 12px; text-align: center;">Signal</th>
+                                    <th style="padding: 12px; text-align: right;">Confidence</th>
+                                    <th style="padding: 12px; text-align: right;">BUY %</th>
+                                    <th style="padding: 12px; text-align: right;">SELL %</th>
+                                    <th style="padding: 12px; text-align: right;">HOLD %</th>
+                                    <th style="padding: 12px; text-align: center;">Count</th>
+                                    <th style="padding: 12px; text-align: center;">Time From Last Duplicate</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                `;
+
+                signalsWithDuplicateInfo.forEach((signal, index) => {
+                    const timestamp = new Date(signal.timestamp);
+                    const timeStr = timestamp.toLocaleTimeString();
+                    const dateStr = timestamp.toLocaleDateString();
+
+                    // Determine signal color
+                    let signalColor = '#ffc107'; // HOLD yellow
+                    if (signal.prediction === 'BUY') signalColor = '#4caf50'; // Green
+                    if (signal.prediction === 'SELL') signalColor = '#f44336'; // Red
+
+                    // Row background (alternating)
+                    const rowBg = index % 2 === 0 ? 'rgba(0, 0, 0, 0.2)' : 'rgba(0, 0, 0, 0.1)';
+
+                    tableHTML += `
+                        <tr style="background: ${rowBg}; border-bottom: 1px solid rgba(255, 255, 255, 0.1);">
+                            <td style="padding: 10px;">${index + 1}</td>
+                            <td style="padding: 10px; font-family: 'Courier New', monospace; font-size: 0.85em;">
+                                ${dateStr}<br>${timeStr}
+                            </td>
+                            <td style="padding: 10px; text-align: center;">
+                                <span style="display: inline-block; padding: 5px 15px; background: ${signalColor}; color: #fff; border-radius: 5px; font-weight: bold;">
+                                    ${signal.prediction}
+                                </span>
+                            </td>
+                            <td style="padding: 10px; text-align: right; font-weight: bold;">
+                                ${(signal.confidence * 100).toFixed(1)}%
+                            </td>
+                            <td style="padding: 10px; text-align: right; color: #4caf50;">
+                                ${(signal.probabilities.buy * 100).toFixed(1)}%
+                            </td>
+                            <td style="padding: 10px; text-align: right; color: #f44336;">
+                                ${(signal.probabilities.sell * 100).toFixed(1)}%
+                            </td>
+                            <td style="padding: 10px; text-align: right; color: #ffc107;">
+                                ${(signal.probabilities.hold * 100).toFixed(1)}%
+                            </td>
+                            <td style="padding: 10px; text-align: center;">
+                                <span style="display: inline-block; padding: 3px 10px; background: rgba(255, 255, 255, 0.2); border-radius: 10px; font-size: 0.85em;">
+                                    ${signal.duplicateCount}x
+                                </span>
+                            </td>
+                            <td style="padding: 10px; text-align: center; font-style: italic; opacity: 0.9;">
+                                ${signal.timeSinceDuplicate}
+                            </td>
+                        </tr>
+                    `;
+                });
+
+                tableHTML += `
+                            </tbody>
+                        </table>
+                    </div>
+                `;
+
+                container.innerHTML = tableHTML;
+            } catch (error) {
+                console.error('Error fetching recent predictions:', error);
+                const container = document.getElementById('recentPredictionsTable');
+                container.innerHTML = '<div style="opacity: 0.6; padding: 20px; text-align: center;">Error loading predictions</div>';
+            }
+        }
+
+        // Refresh all data
+        async function refreshAll() {
+            const indicator = document.getElementById('refreshIndicator');
+            indicator.classList.add('active');
+
+            try {
+                await Promise.all([
+                    fetchEngineStatus(),
+                    fetchPortfolio(),
+                    fetchLivePrice(),
+                    fetchLatestPrediction(),
+                    fetchRiskDashboard(),
+                    fetchSignalExplanation(),
+                    fetchTradeDecisions(),
+                    fetchOpenPositions(),
+                    fetchRecentActivity(),
+                    fetchClosedTrades(),
+                    fetchMultiTimeframeSignals(),
+                    fetchRecentPredictions(),
+                    updateControlPanel()
+                ]);
+            } catch (error) {
+                console.error('Error refreshing data:', error);
+            }
+
+            setTimeout(() => indicator.classList.remove('active'), 500);
+        }
+
+        // Initial load
+        addLog('Dashboard initialized', 'success');
+        refreshAll();
+
+        // Auto-refresh every 3 seconds
+        setInterval(refreshAll, REFRESH_INTERVAL);
+        addLog(`Auto-refresh enabled (every ${REFRESH_INTERVAL/1000}s)`, 'success');
+    </script>
+</body>
+</html>

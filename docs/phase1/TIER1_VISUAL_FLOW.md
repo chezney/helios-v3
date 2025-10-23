@@ -4,36 +4,45 @@
 
 ---
 
-## 🌊 The Complete Data Stream
+## 🌊 The Complete Data Stream (UPDATED ARCHITECTURE - October 2025)
+
+**CRITICAL CHANGE:** VALR NEW_TRADE events are **account-only** (your executed orders), NOT public market data.
+**NEW ARCHITECTURE:** Hybrid REST API (candles) + WebSocket (prices) approach.
 
 ```
                          VALR EXCHANGE (Bitcoin Trading)
                                     |
-                    wss://api.valr.com/ws/trade
-                                    |
-                          [WEBSOCKET CLIENT]
-                                    |
-              ┌─────────────────────┼─────────────────────┐
-              |                     |                     |
-         TRADE TICK            TRADE TICK            TRADE TICK
-         13:18:00.123          13:18:00.456          13:18:00.789
-         R2,019,153            R2,019,154            R2,019,155
-         BUY 0.001 BTC         SELL 0.002 BTC        BUY 0.0005 BTC
-              |                     |                     |
-              └─────────────────────┴─────────────────────┘
-                                    |
-                                    ▼
-                    ┌───────────────────────────────┐
-                    │   MULTI-TIMEFRAME AGGREGATOR  │
-                    │   - Collects trades           │
-                    │   - Groups by time windows    │
-                    │   - Calculates OHLC           │
-                    └───────────────┬───────────────┘
-                                    |
-              ┌─────────────────────┼─────────────────────┐
-              |                     |                     |
-         [1-MIN CANDLE]        [5-MIN CANDLE]       [15-MIN CANDLE]
-         Every 1 minute        Every 5 minutes       Every 15 minutes
+                    ┌───────────────┴───────────────┐
+                    │                               │
+         REST API /buckets              WebSocket MARKET_SUMMARY_UPDATE
+         (Every 60 seconds)              (~1-5 updates/second)
+                    │                               │
+                    ▼                               ▼
+        ┌─────────────────────┐       ┌─────────────────────────┐
+        │ VALRCandlePoller    │       │ VALRWebSocketClient     │
+        │ Official 1m candles │       │ Real-time prices        │
+        │ (PRIMARY)           │       │ (SUPPLEMENTARY)         │
+        └──────────┬──────────┘       └──────────┬──────────────┘
+                   │                              │
+                   │                              │ PRICE_UPDATE event
+                   │                              │ (for position monitoring)
+                   │                              │
+                   ▼                              ▼
+         [1-MIN CANDLE]                  [Real-time Price Cache]
+         From VALR API                   <5 seconds fresh
+         (Pre-aggregated)                (Sub-second SL/TP)
+                   |
+                   ▼
+    ┌──────────────────────────────┐
+    │   CANDLE AGGREGATOR          │
+    │   - Aggregates 1m → 5m, 15m  │
+    │   - Database-driven           │
+    └──────────────┬───────────────┘
+                   |
+              ┌────┼─────┐
+              |    |     |
+         [1m] [5m] [15m]
+         Every 1m  Every 5m  Every 15m
               |                     |                     |
               ▼                     ▼                     ▼
          ┌─────────┐           ┌─────────┐           ┌─────────┐
@@ -83,17 +92,18 @@ TIME      EVENT                                        DATABASE
 
 00:00     🟢 System starts
           ├─ PostgreSQL: Connected ✓
-          ├─ WebSocket: Connected ✓
+          ├─ VALRCandlePoller: Started (REST API polling) ✓
+          ├─ WebSocket: Connected (MARKET_SUMMARY_UPDATE) ✓
           └─ Subscribed to BTCZAR ✓                   [Empty]
 
-00:01     📊 Collecting trades...
-          ├─ Trade 1 received
-          ├─ Trade 2 received
-          └─ ... (83 total)                           [Empty - waiting]
+00:01-00:59 📊 Waiting for first 60-second poll...
+          ├─ WebSocket receiving price updates (1-5/sec)
+          ├─ Price cache updating in real-time
+          └─ No candles yet (waiting for first API poll)
 
 01:00     🎉 FIRST 1-MINUTE CANDLE!
-          ├─ 83 trades aggregated
-          ├─ OHLC calculated
+          ├─ VALRCandlePoller fetches from /buckets API
+          ├─ Official VALR 1m candle received
           ├─ 90 features calculated
           └─ Written to database ✓                    [1 candle]
                                                         ↓
@@ -104,11 +114,11 @@ TIME      EVENT                                        DATABASE
                                                     │ 83 trades      │
                                                     └─────────────────┘
 
-01:01     📊 Collecting more trades...
-          └─ ... (574 total this minute)              [1 candle]
+01:01-01:59 📊 Waiting for next 60-second poll...
+          └─ WebSocket prices continue (~1-5/sec)     [1 candle]
 
 02:00     🎉 SECOND 1-MINUTE CANDLE!
-          ├─ 574 trades aggregated
+          ├─ VALRCandlePoller fetches next candle
           └─ Written to database ✓                    [2 candles]
                                                         ↓
                                                     market_ohlc:
@@ -146,14 +156,33 @@ TIME      EVENT                                        DATABASE
 
 ---
 
-## 🔢 Live Trade → Candle Transformation
+## 🔢 REST API Candle Fetching (NEW ARCHITECTURE)
+
+### Example: Fetching Official VALR Candles
+
+**OLD ARCHITECTURE (DEPRECATED):**
+- WebSocket receives individual trades
+- LiveCandleGenerator aggregates trades into candles
+- Problem: NEW_TRADE events are account-only, not public data
+
+**NEW ARCHITECTURE (CURRENT):**
+```
+VALRCandlePoller polls /v1/public/BTCZAR/buckets every 60s
+                    ↓
+        Fetches pre-aggregated 1m candles from VALR
+                    ↓
+               Duplicate detection
+                    ↓
+         Store candle in market_ohlc table
+                    ↓
+           Emit NEW_CANDLE event
+```
 
 ### Example: 13:18:00 - 13:19:00 (1 minute)
 
 ```
-INCOMING TRADES (83 total)
+REST API RESPONSE (Official VALR Candle)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-
 Trade #1  @ 13:18:00.123  →  R2,019,153  BUY  0.001  ┐
 Trade #2  @ 13:18:02.456  →  R2,019,154  SELL 0.002  │
 Trade #3  @ 13:18:05.789  →  R2,019,180  BUY  0.001  │

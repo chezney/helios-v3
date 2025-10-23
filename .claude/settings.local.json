@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(psql:*)",
+      "Bash(python:*)",
+      "Bash(curl:*)",
+      "Bash(pip install:*)",
+      "Bash(__NEW_LINE__ echo \"=== TIER 2: Neural Network ===\" curl -s http://localhost:8000/api/tier2/health)",
+      "Bash(netstat:*)",
+      "Bash(findstr:*)",
+      "Bash(__NEW_LINE__ echo \"Testing Tier 2...\")",
+      "Bash(__NEW_LINE__ echo -e \"\\n\\nTesting Tier 3...\")",
+      "Bash(__NEW_LINE__ echo -e \"\\n\\nTesting Tier 4...\")",
+      "Bash(__NEW_LINE__ echo -e \"\\n\\nTesting Tier 5...\")",
+      "Bash(__NEW_LINE__ echo -e \"\\n\\nTesting Autonomous Engine...\")",
+      "Bash(__NEW_LINE__ echo \"=== AUTONOMOUS ENGINE STATUS ===\" curl -s http://localhost:8000/api/autonomous-engine/status)",
+      "Bash($env:PYTHONIOENCODING=\"utf-8\")",
+      "Bash(pytest:*)",
+      "Bash(chcp:*)",
+      "Bash(cat:*)",
+      "Bash(export DATABASE_URL=\"postgresql+asyncpg://helios:helios_secure_password_123@localhost:5432/helios_v3\")",
+      "Bash(find:*)",
+      "Bash(timeout 300 python scripts/calculate_features.py --pair BTCZAR)",
+      "Bash(set PYTHONPATH=.)",
+      "Bash(set DATABASE_URL=postgresql+asyncpg://helios:helios_secure_password_123@localhost:5432/helios_v3)",
+      "Bash(tee:*)",
+      "Bash(nvidia-smi:*)",
+      "Bash(pip uninstall:*)",
+      "Bash(conda:*)",
+      "Bash(docker restart:*)",
+      "Bash(docker exec:*)",
+      "Bash(set PYTHONIOENCODING=utf-8)",
+      "Bash(timeout:*)",
+      "Bash($env:DATABASE_URL=\"postgresql+asyncpg://helios:helios_secure_password_123@localhost:5432/helios_v3\")",
+      "Bash(dir:*)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

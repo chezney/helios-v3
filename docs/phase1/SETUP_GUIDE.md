@@ -69,26 +69,60 @@ python create_tier1_tables.py
 [SUCCESS] TIER 1 TABLES CREATED SUCCESSFULLY
 ```
 
-### Step 2: Run Historical Backfill
+### Step 2: Start Server (🆕 AUTO-STARTS DATA COLLECTION) - UPDATED ARCHITECTURE
+
+**NEW (October 2025):** Server now automatically starts real-time data collection with the **NEW HYBRID ARCHITECTURE**!
+
+**ARCHITECTURE CHANGE (October 2025):**
+- **PRIMARY:** VALRCandlePoller (REST API polling every 60s)
+- **SUPPLEMENTARY:** VALRWebSocketClient (real-time prices ~1-5 per second)
+- **DEPRECATED:** ~~LiveCandleGenerator~~ (removed - NEW_TRADE is account-only)
 
 ```bash
-python run_historical_backfill.py
+python main.py
+```
+
+**What Gets Auto-Started:**
+- ✅ VALRCandlePoller polling `/v1/public/{pair}/buckets` API (official VALR candles)
+- ✅ VALRWebSocketClient for MARKET_SUMMARY_UPDATE (real-time prices)
+- ✅ AGGREGATED_ORDERBOOK_UPDATE for bid/ask spread features
+- ✅ Live data flowing to database immediately (1m → 5m → 15m aggregation)
+- ✅ All configured trading pairs subscribed
+
+**Expected Server Output:**
+```
+[OK] Database connection verified
+[OK] Tier 2 prediction service initialized
+[OK] Tier 3 Aether Risk Engine initialized
+[OK] Tier 5 Portfolio Manager initialized
+
+[Tier 1] Starting data collection...
+[Tier 1] VALRCandlePoller started (polling every 60s)
+[Tier 1] VALRWebSocketClient started (real-time prices)
+[Tier 1] Subscribed to BTCZAR (MARKET_SUMMARY_UPDATE + orderbook)
+[Tier 1] Subscribed to ETHZAR (MARKET_SUMMARY_UPDATE + orderbook)
+[Tier 1] Subscribed to SOLZAR (MARKET_SUMMARY_UPDATE + orderbook)
+[OK] Tier 1 real-time data collection active for 3 pairs
+
+Application startup complete. Ready to accept requests.
+```
+
+### Step 2b: Historical Backfill (Optional)
+
+If you need historical data before the WebSocket started:
+
+```bash
+python scripts/smart_gap_backfill.py
 ```
 
 **What it does:**
-- Fetches recent trades from VALR API
+- Detects gaps in candle data
+- Fetches ONLY missing trades from VALR API
 - Aggregates into 1m, 5m, 15m candles
 - Calculates 90 features per timeframe
-- Stores in database
+- Fills gaps in database
 
-**Expected Duration:** ~2 minutes for 3 pairs
-
-**Output:**
-```
-BTCZAR: 400-600 candles, 10-20 features
-ETHZAR: 400-600 candles, 60-100 features
-SOLZAR: 400-600 candles, 100-150 features
-```
+**Expected Duration:** ~2 minutes for 3 pairs (depends on gap size)
 
 ### Step 3: Verify Data Quality
 

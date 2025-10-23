@@ -45,7 +45,7 @@ class DatabaseSettings(BaseSettings):
     model_config = {"extra": "allow", "env_file": ENV_FILE_PATH, "env_file_encoding": "utf-8"}
 
     # PostgreSQL
-    postgres_host: str = Field(default="localhost", env="POSTGRES_HOST")
+    postgres_host: str = Field(default="127.0.0.1", env="POSTGRES_HOST")
     postgres_port: int = Field(default=5432, env="POSTGRES_PORT")
     postgres_db: str = Field(default="helios_v3", env="POSTGRES_DB")
     postgres_user: str = Field(default="helios", env="POSTGRES_USER")
@@ -84,7 +84,7 @@ class DatabaseSettings(BaseSettings):
 class TradingSettings(BaseSettings):
     """Trading configuration"""
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "allow", "env_file": ENV_FILE_PATH, "env_file_encoding": "utf-8"}
 
     mode: TradingMode = Field(default=TradingMode.PAPER, env="TRADING_MODE")
 
@@ -95,7 +95,7 @@ class TradingSettings(BaseSettings):
     valr_websocket_url: str = Field(default="wss://api.valr.com/ws/trade", env="VALR_WEBSOCKET_URL")
 
     # Trading pairs
-    trading_pairs: list[str] = Field(default=["BTCZAR", "ETHZAR", "SOLZAR"])
+    trading_pairs: list[str] = Field(default=["BTCZAR", "ETHZAR", "SOLZAR", "BTCUSDT"])
 
     # Risk limits
     max_position_size_pct: float = Field(default=0.20, env="MAX_POSITION_SIZE_PCT")
@@ -107,7 +107,7 @@ class TradingSettings(BaseSettings):
 class MLSettings(BaseSettings):
     """Machine Learning configuration"""
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "allow", "env_file": ENV_FILE_PATH, "env_file_encoding": "utf-8"}
 
     # Model paths
     model_path: str = Field(default="models/helios_neural_network_40m_best.pt", env="MODEL_PATH")
@@ -130,7 +130,7 @@ class MLSettings(BaseSettings):
 class LLMSettings(BaseSettings):
     """LLM configuration"""
 
-    model_config = {"extra": "allow"}
+    model_config = {"extra": "allow", "env_file": ENV_FILE_PATH, "env_file_encoding": "utf-8"}
 
     # Provider
     provider: str = Field(default="anthropic", env="LLM_PROVIDER")

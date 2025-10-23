@@ -1,12 +1,28 @@
 """
 Helios Trading System V3.0 - Tier 1: VALR WebSocket Client
-Real-time market data collection from VALR exchange
-Following PRD Section 8: WebSocket Data Ingestion
+Real-Time Price Feed for Position Monitoring and GUI Updates
+
+IMPORTANT: This WebSocket client is SUPPLEMENTARY, not the primary data source.
+- Primary data: VALRCandlePoller (REST API polling for 1m candles)
+- WebSocket role: Real-time prices for position monitoring, GUI updates, orderbook
+
+VALR WebSocket Limitations:
+- NEW_TRADE events are ACCOUNT-ONLY (your executed orders), NOT public market data
+- No public trade-by-trade WebSocket available from VALR
+- MARKET_SUMMARY_UPDATE provides real-time price snapshots (~1-5 per second)
+- AGGREGATED_ORDERBOOK_UPDATE provides orderbook depth (for features)
+
+Architecture Decision:
+We use REST API /buckets endpoint for reliable 1m candles (primary data source),
+and WebSocket for real-time price updates (supplementary for sub-minute monitoring).
 """
 
 import asyncio
 import json
 import websockets
+import hmac
+import hashlib
+import time
 from datetime import datetime, timezone
 from typing import Optional, Callable, Dict, Any, List
 from dataclasses import dataclass
@@ -39,14 +55,22 @@ class OrderBookSnapshot:
 
 class VALRWebSocketClient:
     """
-    WebSocket client for real-time VALR market data.
+    WebSocket client for real-time VALR price updates (SUPPLEMENTARY DATA SOURCE).
+
+    Purpose:
+    - Real-time price monitoring for position management (stop-loss, take-profit triggers)
+    - Sub-second price updates for GUI display
+    - Orderbook depth for microstructure features
+
+    NOT used for:
+    - Primary candle generation (handled by VALRCandlePoller via REST API)
+    - Trade-by-trade data (NEW_TRADE is account-only, not public data)
 
     Features:
-    - Connects to VALR WebSocket API
-    - Subscribes to multiple trading pairs
-    - Handles trades, order book updates, and aggregated candles
+    - MARKET_SUMMARY_UPDATE: Real-time prices (~1-5 per second)
+    - AGGREGATED_ORDERBOOK_UPDATE: Bid/ask depth for features
     - Auto-reconnect on disconnection
-    - Message buffering and rate limiting
+    - Price update callbacks for position monitoring cache
     """
 
     def __init__(
@@ -54,19 +78,27 @@ class VALRWebSocketClient:
         pairs: List[str] = None,
         on_trade: Optional[Callable[[MarketTick], None]] = None,
         on_orderbook: Optional[Callable[[OrderBookSnapshot], None]] = None,
-        on_aggregated_orderbook: Optional[Callable[[Dict], None]] = None
+        on_aggregated_orderbook: Optional[Callable[[Dict], None]] = None,
+        api_key: Optional[str] = None,
+        api_secret: Optional[str] = None
     ):
         """
-        Initialize WebSocket client.
+        Initialize WebSocket client with authentication.
 
         Args:
             pairs: Trading pairs to subscribe to (e.g., ["BTCZAR", "ETHZAR"])
             on_trade: Callback for trade messages
             on_orderbook: Callback for full orderbook snapshots
             on_aggregated_orderbook: Callback for aggregated orderbook updates
+            api_key: VALR API key (required for NEW_TRADE events)
+            api_secret: VALR API secret (required for NEW_TRADE events)
         """
         self.pairs = pairs or settings.trading.trading_pairs
         self.websocket_url = settings.trading.valr_websocket_url
+
+        # API credentials for authentication
+        self.api_key = api_key or settings.trading.valr_api_key
+        self.api_secret = api_secret or settings.trading.valr_api_secret
 
         # Callbacks
         self.on_trade = on_trade
@@ -83,21 +115,59 @@ class VALRWebSocketClient:
         self.reconnect_count = 0
         self.last_message_time: Optional[datetime] = None
 
-        logger.info(f"VALR WebSocket Client initialized for pairs: {self.pairs}")
+        logger.info(f"VALR WebSocket Client initialized for pairs: {self.pairs} (authenticated={bool(self.api_key)})")
+
+    def _sign_request(self, timestamp: int, verb: str, path: str) -> str:
+        """
+        Generate HMAC SHA512 signature for WebSocket authentication.
+
+        Args:
+            timestamp: Unix timestamp in milliseconds
+            verb: HTTP verb (GET for WebSocket)
+            path: WebSocket path (/ws/trade or /ws/account)
+
+        Returns:
+            Hex-encoded signature
+        """
+        payload = f"{timestamp}{verb.upper()}{path}"
+        signature = hmac.new(
+            self.api_secret.encode('utf-8'),
+            payload.encode('utf-8'),
+            hashlib.sha512
+        ).hexdigest()
+        return signature
 
     async def connect(self):
-        """Connect to VALR WebSocket"""
+        """Connect to VALR WebSocket with authentication"""
         try:
             logger.info(f"Connecting to VALR WebSocket: {self.websocket_url}")
+
+            # Generate authentication headers if API credentials are provided
+            extra_headers = {}
+            if self.api_key and self.api_secret:
+                timestamp = int(time.time() * 1000)
+                # Extract path from websocket_url for signature
+                from urllib.parse import urlparse
+                parsed_url = urlparse(self.websocket_url)
+                path = parsed_url.path  # e.g., /ws/account or /ws/trade
+                signature = self._sign_request(timestamp, 'GET', path)
+
+                extra_headers = {
+                    'X-VALR-API-KEY': self.api_key,
+                    'X-VALR-SIGNATURE': signature,
+                    'X-VALR-TIMESTAMP': str(timestamp)
+                }
+                logger.info("WebSocket authentication headers generated")
 
             self.ws = await websockets.connect(
                 self.websocket_url,
                 ping_interval=20,
-                ping_timeout=10
+                ping_timeout=10,
+                additional_headers=extra_headers if extra_headers else None
             )
 
             self.connected = True
-            logger.info("WebSocket connection established")
+            logger.info("WebSocket connection established (authenticated)" if extra_headers else "WebSocket connection established (unauthenticated)")
 
             # Subscribe to data streams
             await self._subscribe()
@@ -110,19 +180,20 @@ class VALRWebSocketClient:
             return False
 
     async def _subscribe(self):
-        """Subscribe to market data streams"""
+        """
+        Subscribe to market data streams.
+
+        NOTE: We do NOT subscribe to NEW_TRADE events because they are
+        account-only (trades YOU execute), not public market data.
+
+        Subscriptions:
+        - AGGREGATED_ORDERBOOK_UPDATE: For bid/ask spread features
+        - MARKET_SUMMARY_UPDATE: Handled automatically by VALR (no explicit subscription needed)
+        """
         subscriptions = []
 
         for pair in self.pairs:
-            # Subscribe to trades (MARKET_SUMMARY_UPDATE)
-            subscriptions.append({
-                "type": "SUBSCRIBE",
-                "subscriptions": [
-                    {"event": "MARKET_SUMMARY_UPDATE", "pairs": [pair]}
-                ]
-            })
-
-            # Subscribe to aggregated orderbook
+            # Subscribe to aggregated orderbook for market microstructure features
             subscriptions.append({
                 "type": "SUBSCRIBE",
                 "subscriptions": [
@@ -223,9 +294,6 @@ class VALRWebSocketClient:
             elif msg_type == "AGGREGATED_ORDERBOOK_UPDATE":
                 await self._handle_aggregated_orderbook(data)
 
-            elif msg_type == "NEW_TRADE":
-                await self._handle_trade(data)
-
             elif msg_type == "AUTHENTICATED":
                 logger.info("WebSocket authenticated")
 
@@ -243,7 +311,16 @@ class VALRWebSocketClient:
             logger.error(f"Error processing message: {e}", exc_info=True)
 
     async def _handle_market_summary(self, data: Dict):
-        """Handle market summary update"""
+        """
+        Handle market summary update - Real-time price feed for position monitoring.
+
+        This provides sub-second price updates (~1-5 per second) used by:
+        - PositionManager for stop-loss/take-profit triggers
+        - GUI for live price display
+        - Price monitoring cache
+
+        NOTE: This is NOT used for candle generation (handled by VALRCandlePoller).
+        """
         try:
             summary = data.get("data", {})
 
@@ -253,19 +330,21 @@ class VALRWebSocketClient:
             change_from_previous = float(summary.get("changeFromPrevious", 0))
 
             logger.debug(
-                f"Market Summary: {pair} - "
+                f"Price Update: {pair} - "
                 f"Price: R{last_price:,.2f}, "
-                f"Volume: {base_volume:,.2f}, "
+                f"24h Volume: {base_volume:,.2f}, "
                 f"Change: {change_from_previous:+.2f}%"
             )
 
-            # Call trade callback if exists
+            # Call price update callback if exists (for position monitoring cache)
             if self.on_trade and last_price > 0:
+                # Reusing on_trade callback for price updates
+                # (keeping backward compatibility with existing code)
                 tick = MarketTick(
                     pair=pair,
                     price=last_price,
-                    quantity=0.0,  # Not provided in market summary
-                    side="UNKNOWN",
+                    quantity=0.0,  # Not relevant for price updates
+                    side="PRICE_UPDATE",  # Distinguish from actual trades
                     timestamp=datetime.now(timezone.utc)
                 )
                 await asyncio.create_task(self.on_trade(tick))
@@ -318,34 +397,6 @@ class VALRWebSocketClient:
         except Exception as e:
             logger.error(f"Error handling orderbook: {e}", exc_info=True)
 
-    async def _handle_trade(self, data: Dict):
-        """Handle new trade"""
-        try:
-            trade = data.get("data", {})
-
-            pair = trade.get("currencyPair")
-            price = float(trade.get("price", 0))
-            quantity = float(trade.get("quantity", 0))
-            side = trade.get("takerSide", "UNKNOWN")
-
-            logger.debug(
-                f"Trade: {pair} - "
-                f"{side} {quantity:,.8f} @ R{price:,.2f}"
-            )
-
-            # Call trade callback if exists
-            if self.on_trade:
-                tick = MarketTick(
-                    pair=pair,
-                    price=price,
-                    quantity=quantity,
-                    side=side,
-                    timestamp=datetime.now(timezone.utc)
-                )
-                await asyncio.create_task(self.on_trade(tick))
-
-        except Exception as e:
-            logger.error(f"Error handling trade: {e}", exc_info=True)
 
     async def stop(self):
         """Stop the WebSocket client"""

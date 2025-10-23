@@ -154,6 +154,7 @@ Thumbs.db
 ehthumbs.db
 Desktop.ini
 $RECYCLE.BIN/
+nul
 
 # Linux
 *~
@@ -214,3 +215,76 @@ test-results/
 # Secrets
 secrets/
 credentials/
+
+# ============================================================================
+# PROJECT-SPECIFIC (Temporary/Generated Files)
+# ============================================================================
+
+# SSH Keys
+*.ppk
+*.pem
+*.key
+
+# Status/Documentation files (temporary)
+*_COMPLETE.md
+*_COMPLETE_*.md
+*_FIX*.md
+*_ANALYSIS.md
+*_REPORT.md
+*_GUIDE.md
+*_STATUS.md
+*_SUMMARY.md
+*_PLAN.md
+*_IMPLEMENTATION.md
+QA_*.md
+AWS_*.md
+DASHBOARD_*.md
+DEPLOYMENT_*.md
+
+# Diagnostic/Test scripts
+check_*.py
+test_*.py
+verify_*.py
+diagnose_*.py
+analyze_*.py
+monitor_*.py
+show_*.py
+trace_*.py
+
+# Windows batch files
+*.bat
+
+# Backup directories
+backup*/
+backups*/
+*_backup/
+
+# Archive directories
+_archive/
+old_*/
+
+# Backtest results
+backtest_results/
+backtest_*/
+
+# Cloud data
+cloud_*/
+
+# Helios results
+helios_results/
+
+# Deploy directory
+deploy/
+
+# Temporary marker files
+*.txt
+!requirements.txt
+
+# Duplicate/misnamed files
+C�*
+
+# Nginx config (server-specific)
+nginx*.conf
+
+# Grafana dashboards (server-specific)
+grafana/

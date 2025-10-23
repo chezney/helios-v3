@@ -1,9 +1,9 @@
 # HELIOS V3.0 - PHASE 1 COMPLETE ✅
 
-**Status:** DELIVERED
-**Date:** October 5, 2025
+**Status:** OPERATIONAL
+**Date:** October 10, 2025 (Updated)
 **Phase:** Data Foundation (Weeks 1-6)
-**Deliverable:** Working data pipeline with historical data and real-time WebSocket ingestion
+**Deliverable:** Working data pipeline with historical data, real-time data collection, and automated multi-timeframe candle aggregation
 
 ---
 
@@ -13,13 +13,14 @@ Phase 1 of the Helios Trading System V3.0 has been successfully completed. All r
 
 **Key Achievements:**
 - ✅ PRD-compliant database schema implemented
-- ✅ Real-time WebSocket data ingestion operational
-- ✅ Multi-timeframe candle aggregation (1m, 5m, 15m)
+- ✅ Real-time data collection via REST API polling (60s interval)
+- ✅ **Automated multi-timeframe candle aggregation (1m→5m/15m/1h/4h/1d)** - NEW Oct 10, 2025
 - ✅ 90-feature engineering pipeline functional
 - ✅ Historical data backfill system operational
-- ✅ 2,220 OHLC candles collected
-- ✅ 422 feature vectors calculated (90 features each)
+- ✅ **186,855 OHLC candles collected** (updated Oct 10, 2025)
+- ✅ Continuous feature calculation for real-time data
 - ✅ All data quality checks passing
+- ✅ **CandleAggregatorService running automatically** - NEW Oct 10, 2025
 
 ---
 
@@ -44,7 +45,13 @@ CREATE TABLE market_ohlc (
     UNIQUE(pair, timeframe, open_time)
 );
 ```
-**Current Data:** 2,220 candles (BTCZAR: 729, ETHZAR: 709, SOLZAR: 782)
+**Current Data (Updated Oct 10, 2025):** 186,855 candles across all timeframes
+- 1m: 129,288 candles
+- 5m: 45,878 candles
+- 15m: 17,039 candles
+- 1h: 4,372 candles
+- 4h: 1,080 candles
+- 1d: 180 candles
 
 **2. engineered_features** - 90-dimensional feature vectors
 ```sql
@@ -101,10 +108,14 @@ CREATE TABLE market_trades (
 
 | Component | File | Status | Lines | Description |
 |-----------|------|--------|-------|-------------|
-| WebSocket Client | `src/data/collectors/valr_websocket_client.py` | ✅ | 431 | Real-time VALR data ingestion |
-| Candle Aggregator | `src/data/processors/candle_aggregator.py` | ✅ | 400+ | Multi-timeframe OHLC generation |
+| WebSocket Client | `src/data/collectors/valr_websocket_client.py` | ✅ | 431 | Real-time market data (prices, orderbook) |
+| **VALRCandlePoller** | `src/data/collectors/valr_candle_poller.py` | ✅ | 414 | **REST API polling for official 1m candles (PRIMARY)** |
+| ~~LiveCandleGenerator~~ | ~~`src/data/streaming/live_candle_generator.py`~~ | ⚠️ DEPRECATED | 420 | ⚠️ **DEPRECATED** - WebSocket candles (NEW_TRADE is account-only) |
+| Candle Aggregator (Manual) | `src/data/processors/candle_aggregator.py` | ✅ | 400+ | Manual multi-timeframe OHLC generation script |
+| **🆕 CandleAggregatorService** | `src/data/processors/candle_aggregator_service.py` | ✅ | 300+ | **Automated background aggregation (5m/15m/1h/4h/1d) - Oct 10, 2025** |
 | Feature Engineering | `src/data/processors/feature_engineering.py` | ✅ | 500+ | 90-feature calculation |
 | Database Writer | `src/data/storage/database_writer.py` | ✅ | - | Async data persistence |
+| **🆕 Auto-Start** | `main.py` (lines 110-149, 157-173) | ✅ | 60 | **Automatic data collection + candle aggregation on server launch** |
 
 **Feature Engineering Details:**
 - **30 features per timeframe** (1m, 5m, 15m)
@@ -116,6 +127,24 @@ CREATE TABLE market_trades (
   - Volume (3): volume SMA, volume ratio, VWAP
   - Microstructure (3): spread, depth imbalance, tick direction
   - Statistical (2): skewness, kurtosis
+
+**Real-Time Candle Generation (UPDATED October 2025):**
+- **PRIMARY:** 1m candles via VALRCandlePoller (REST API `/v1/public/{pair}/buckets`)
+  - Polls VALR every 60 seconds for official pre-aggregated candles
+  - Duplicate detection prevents data corruption
+  - Exponential backoff error handling (5s → 60s)
+- **SUPPLEMENTARY:** Real-time prices via VALRWebSocketClient (MARKET_SUMMARY_UPDATE)
+  - ~1-5 price updates per second for position monitoring
+  - Sub-second stop-loss/take-profit triggers
+- **DEPRECATED:** ~~LiveCandleGenerator~~ (WebSocket-based candle aggregation)
+  - ⚠️ Removed due to NEW_TRADE events being account-only (not public market data)
+- **Higher timeframes (AUTOMATED - Oct 10, 2025):** 1h, 4h, 1d via CandleAggregatorService
+  - **Service:** `src/data/processors/candle_aggregator_service.py`
+  - **Frequency:** Auto-aggregates every 5 minutes
+  - **Timeframes:** 5m (every 5min), 15m (every 5min), 1h (every 15min), 4h (every 60min), 1d (every 60min)
+  - **Status:** Running automatically in background since server startup
+- **Manual aggregation:** `scripts/aggregate_candles.py` (for historical backfill)
+- **Usage:** `python scripts/aggregate_candles.py --pair BTCZAR --timeframe 1h`
 
 ### Week 5-6: Historical Backfill
 
@@ -198,21 +227,61 @@ Checks:
 - Feature vector sizes (should be 90)
 - NULL values, price consistency, volume validity
 
-### WebSocket Real-Time Collection (Optional)
+### Real-Time Data Collection (🆕 AUTO-STARTS) - UPDATED ARCHITECTURE
+
+**NEW (October 2025):** Real-time data collection now **starts automatically** when you run the server!
+
+**ARCHITECTURE CHANGE (October 2025):**
+- **PRIMARY:** VALRCandlePoller (REST API polling for official candles)
+- **SUPPLEMENTARY:** VALRWebSocketClient (real-time prices for position monitoring)
+- **DEPRECATED:** ~~LiveCandleGenerator~~ (WebSocket candle generation removed)
+
+```bash
+# Start server - Data collection starts automatically
+python main.py
+
+# Expected output:
+# [Tier 1] Starting data collection...
+# [Tier 1] VALRCandlePoller started (polling every 60s)
+# [Tier 1] VALRWebSocketClient started (real-time prices)
+# [Tier 1] Subscribed to BTCZAR (MARKET_SUMMARY_UPDATE)
+# [Tier 1] Subscribed to ETHZAR (MARKET_SUMMARY_UPDATE)
+# [Tier 1] Subscribed to SOLZAR (MARKET_SUMMARY_UPDATE)
+# [OK] Tier 1 real-time data collection active
+```
+
+**What Gets Auto-Started:**
+- ✅ VALRCandlePoller polling `/v1/public/{pair}/buckets` API every 60 seconds
+- ✅ VALRWebSocketClient for real-time price updates (MARKET_SUMMARY_UPDATE)
+- ✅ AGGREGATED_ORDERBOOK_UPDATE for bid/ask spread features
+- ✅ Subscriptions to all configured trading pairs
+- ✅ Official VALR 1m candles flowing to `market_ohlc` table
+
+**Manual Control (Optional):**
 
 ```python
+from src.data.collectors.valr_candle_poller import VALRCandlePoller
 from src.data.collectors.valr_websocket_client import VALRWebSocketClient
 
-# Initialize WebSocket client
-client = VALRWebSocketClient(
+# Initialize candle poller manually if needed
+poller = VALRCandlePoller(
+    db=db_session,
     pairs=["BTCZAR", "ETHZAR", "SOLZAR"],
-    on_trade=handle_trade,          # Callback for trades
-    on_orderbook=handle_orderbook   # Callback for orderbook
+    event_queue=event_queue,
+    base_url="https://api.valr.com"
 )
+await poller.start()
 
-# Start receiving data
+# Initialize WebSocket client for real-time prices
+client = VALRWebSocketClient(
+    api_url="wss://api.valr.com/ws/trade"
+)
+# Note: NEW_TRADE subscription removed (account-only)
+# Uses MARKET_SUMMARY_UPDATE for prices instead
 await client.start()
 ```
+
+**See `docs/TIER1_AUTO_START.md` and `docs/phase1/VALR_ARCHITECTURE_MIGRATION_GUIDE.md` for complete documentation.**
 
 ---
 
