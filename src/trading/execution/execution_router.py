@@ -65,7 +65,16 @@ class ExecutionRouter:
         self.mode_orchestrator = TradingModeOrchestrator(db_session)
 
         # Initialize LIVE Safety Gates (Phase 3)
-        self.safety_gates = LiveSafetyGates(db_session=db_session)
+        # ADJUSTED FOR TESTING WITH R960 CAPITAL (2025-10-23)
+        # Once testing is successful, increase limits gradually
+        self.safety_gates = LiveSafetyGates(
+            db_session=db_session,
+            max_order_size_zar=300.0,        # R300 max per trade (31% of R960 capital)
+            max_daily_trades=50,             # 50 trades/day max (unchanged)
+            min_order_value_zar=50.0,        # R50 minimum (VALR minimum ~R10)
+            max_position_exposure_pct=30.0,  # 30% portfolio max per asset (unchanged)
+            balance_buffer_pct=10.0          # 10% buffer for fees (increased from 5%)
+        )
 
         # Initialize both trading clients
         # Paper Trading Client (always available)
