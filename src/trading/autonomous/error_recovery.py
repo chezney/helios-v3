@@ -379,7 +379,7 @@ class TierRecoveryManager:
                 from src.ml.inference.ensemble_prediction_service import EnsemblePredictionService
                 self.engine.predictor = EnsemblePredictionService(
                     nn_model_path="models/DISABLED_neural_network.pt",
-                    autogluon_path="models/autogluon_ensemble"
+                    autogluon_path="models/autogluon_ensemble_with_timestamp"
                 )
                 logger.info("Tier 2 (AutoGluon Ensemble Predictor) reinitialized - unified with API")
 

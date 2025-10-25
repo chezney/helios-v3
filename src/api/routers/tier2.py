@@ -29,7 +29,7 @@ def init_prediction_service():
         prediction_service = EnsemblePredictionService(
             nn_model_path="models/DISABLED_neural_network.pt",  # Non-existent path to disable NN
             nn_scaler_path="models/DISABLED_scaler.pkl",  # Non-existent path to disable NN
-            autogluon_path="models/autogluon_ensemble"
+            autogluon_path="models/autogluon_ensemble_with_timestamp"
         )
         logger.info("EnsemblePredictionService initialized successfully (AutoGluon ONLY)")
     except FileNotFoundError as e:

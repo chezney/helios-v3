@@ -50,7 +50,7 @@ class EnsemblePredictionService:
         nn_scaler_path: str = "models/scalers/feature_scaler_40m.pkl",
 
         # AutoGluon ensemble
-        autogluon_path: Optional[str] = "models/autogluon_ensemble",
+        autogluon_path: Optional[str] = "models/autogluon_ensemble_with_timestamp",
 
         # Transformer model
         transformer_path: Optional[str] = "models/transformer_model.pt",

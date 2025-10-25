@@ -154,7 +154,7 @@ class AutonomousTradingEngine:
             from src.ml.inference.ensemble_prediction_service import EnsemblePredictionService
             self.predictor = EnsemblePredictionService(
                 nn_model_path="models/DISABLED_neural_network.pt",  # Disable neural network
-                autogluon_path="models/autogluon_ensemble"
+                autogluon_path="models/autogluon_ensemble_with_timestamp"
             )
             logger.info("[OK] Tier 2: AutoGluon Ensemble Predictor initialized (unified with API)")
         except Exception as e:
@@ -762,11 +762,19 @@ class AutonomousTradingEngine:
                 # EXECUTE TRADE
                 self.current_stage = "trade_execution"
                 print("[TRADE] Executing trade...")
+
+                # Get current trading mode from orchestrator (hot-swap support)
+                from src.trading.orchestrator.mode_orchestrator import TradingModeOrchestrator
+                async with self.session_factory() as session:
+                    orchestrator = TradingModeOrchestrator(db_session=session, valr_client=None)
+                    current_mode = await orchestrator.get_current_mode()
+
                 execution_result = await self.position_manager.open_position(
                     pair=pair,
                     signal=signal,
                     trade_params=final_trade_params,
-                    strategic_reasoning=strategic_decision.get('strategic_reasoning') if llm_enabled else 'Auto-approved (LLM disabled)'
+                    strategic_reasoning=strategic_decision.get('strategic_reasoning') if llm_enabled else 'Auto-approved (LLM disabled)',
+                    trading_mode=current_mode
                 )
 
                 if execution_result.get('success'):
@@ -1077,11 +1085,18 @@ class AutonomousTradingEngine:
 
                 # Execute the trade
                 try:
+                    # Get current trading mode from orchestrator (hot-swap support)
+                    from src.trading.orchestrator.mode_orchestrator import TradingModeOrchestrator
+                    async with self.session_factory() as session:
+                        orchestrator = TradingModeOrchestrator(db_session=session, valr_client=None)
+                        current_mode = await orchestrator.get_current_mode()
+
                     execution_result = await self.position_manager.open_position(
                         pair=pair,
                         signal=signal,
                         trade_params=trade_params,
-                        strategic_reasoning='Pending trade execution (catch-up)'
+                        strategic_reasoning='Pending trade execution (catch-up)',
+                        trading_mode=current_mode
                     )
 
                     if execution_result.get('success'):

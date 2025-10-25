@@ -407,7 +407,7 @@ async def make_prediction(request: PredictionRequest):
 
         predictor = EnsemblePredictionService(
             nn_model_path="models/DISABLED_neural_network.pt",
-            autogluon_path="models/autogluon_ensemble"
+            autogluon_path="models/autogluon_ensemble_with_timestamp"
         )
 
         # Make prediction
